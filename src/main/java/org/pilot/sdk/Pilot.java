@@ -78,6 +78,7 @@ public final class Pilot {
     private ScheduledFuture<?> m_logFlushFuture;
 
     private PilotPanel m_currentPanel;
+    private final PilotUI m_ui = new PilotUI();
 
     private Pilot(@NonNull PilotConfig config) {
         m_config = config;
@@ -164,9 +165,22 @@ public final class Pilot {
     }
 
     /**
+     * Get the central UI data source. Each service/module adds its own tab here.
+     * Changes are automatically sent to the server on the next poll cycle.
+     *
+     * @return The shared PilotUI instance
+     */
+    @NonNull
+    public static PilotUI getUI() {
+        return requireInstance().m_ui;
+    }
+
+    /**
      * Submit a debug panel layout. If a session is active, sends immediately.
      * If not yet connected, the panel will be sent once the session starts.
+     * @deprecated Use {@link #getUI()} with tabs instead. Changes are sent automatically.
      */
+    @Deprecated
     public static void submitPanel(@NonNull PilotPanel panel) {
         Pilot p = requireInstance();
         p.m_currentPanel = panel;
@@ -408,10 +422,16 @@ public final class Pilot {
 
         notifySessionStarted(sessionToken);
 
-        // Send pending panel
+        // Send pending panel (legacy)
         PilotPanel panel = m_currentPanel;
         if (panel != null) {
             doSubmitPanel(sessionToken, panel);
+        }
+
+        // Send UI (tab-based) if any tabs exist
+        if (m_ui.hasTabs()) {
+            m_ui.clearDirty();
+            doSubmitUI(sessionToken);
         }
 
         // Start background tasks
@@ -460,6 +480,17 @@ public final class Pilot {
 
     private void doPollActions(@NonNull String sessionToken) {
         if (!m_running.get()) return;
+
+        // Poll value providers (compare with cache, mark dirty if changed)
+        m_ui.pollValues();
+
+        // Auto-send UI if changed
+        if (m_ui.isDirty()) {
+            m_ui.incrementRevision();
+            m_ui.clearDirty();
+            doSubmitUI(sessionToken);
+        }
+
         try {
             JSONObject json = m_httpClient.pollActions(sessionToken);
             JSONArray actionsArr = json.optJSONArray("actions");
@@ -468,6 +499,15 @@ public final class Pilot {
                     JSONObject actionJson = actionsArr.optJSONObject(i);
                     if (actionJson != null) {
                         PilotAction action = PilotAction.fromJson(actionJson);
+
+                        // Dispatch to per-widget callback (PilotUI)
+                        try {
+                            m_ui.dispatchAction(action);
+                        } catch (Exception ex) {
+                            PilotLog.e("Widget callback threw exception", ex);
+                        }
+
+                        // Notify global action listeners
                         for (PilotActionListener listener : m_actionListeners) {
                             try {
                                 listener.onPilotActionReceived(action);
@@ -495,6 +535,19 @@ public final class Pilot {
                 PilotLog.d("Panel submitted (revision=%d)", panel.getRevision());
             } catch (PilotException e) {
                 PilotLog.e("Failed to submit panel", e);
+                notifyError(e);
+            }
+        });
+    }
+
+    private void doSubmitUI(@NonNull String sessionToken) {
+        if (m_executor == null || m_executor.isShutdown()) return;
+        m_executor.execute(() -> {
+            try {
+                m_httpClient.submitPanel(sessionToken, m_ui.toJson());
+                PilotLog.d("UI submitted (revision=%d)", m_ui.getRevision());
+            } catch (PilotException e) {
+                PilotLog.e("Failed to submit UI", e);
                 notifyError(e);
             }
         });
