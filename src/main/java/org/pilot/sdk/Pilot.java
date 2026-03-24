@@ -470,7 +470,7 @@ public final class Pilot {
                         PilotAction action = PilotAction.fromJson(actionJson);
                         for (PilotActionListener listener : m_actionListeners) {
                             try {
-                                listener.onAction(action);
+                                listener.onPilotActionReceived(action);
                             } catch (Exception ex) {
                                 PilotLog.e("Action listener threw exception", ex);
                             }
@@ -558,37 +558,37 @@ public final class Pilot {
 
     private void notifyConnecting() {
         for (PilotSessionListener l : m_sessionListeners) {
-            l.onConnecting();
+            l.onPilotSessionConnecting();
         }
     }
 
     private void notifyWaitingApproval(@NonNull String requestId) {
         for (PilotSessionListener l : m_sessionListeners) {
-            l.onWaitingApproval(requestId);
+            l.onPilotSessionWaitingApproval(requestId);
         }
     }
 
     private void notifySessionStarted(@NonNull String sessionToken) {
         for (PilotSessionListener l : m_sessionListeners) {
-            l.onSessionStarted(sessionToken);
+            l.onPilotSessionStarted(sessionToken);
         }
     }
 
     private void notifySessionClosed() {
         for (PilotSessionListener l : m_sessionListeners) {
-            l.onSessionClosed();
+            l.onPilotSessionClosed();
         }
     }
 
     private void notifyRejected() {
         for (PilotSessionListener l : m_sessionListeners) {
-            l.onRejected();
+            l.onPilotSessionRejected();
         }
     }
 
     private void notifyError(@NonNull PilotException exception) {
         for (PilotSessionListener l : m_sessionListeners) {
-            l.onError(exception);
+            l.onPilotSessionError(exception);
         }
     }
 }

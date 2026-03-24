@@ -69,14 +69,12 @@ final class PilotLog {
         }
     }
 
-    static void e(@NonNull String message, Throwable t) {
-        if (s_level.ordinal() <= PilotLogLevel.ERROR.ordinal()) {
-            PilotLogger logger = s_logger;
-            if (logger != null) {
-                logger.log(PilotLogLevel.ERROR, TAG, message, t);
-            } else {
-                Log.e(TAG, message, t);
-            }
+    static void e(@NonNull String message, @NonNull Throwable t) {
+        PilotLogger logger = s_logger;
+        if (logger != null) {
+            logger.log(PilotLogLevel.EXCEPTION, TAG, message, t);
+        } else {
+            Log.e(TAG, message, t);
         }
     }
 

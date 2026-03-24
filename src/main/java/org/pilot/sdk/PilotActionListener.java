@@ -12,5 +12,5 @@ public interface PilotActionListener {
      *
      * @param action The action to handle
      */
-    void onAction(@NonNull PilotAction action);
+    void onPilotActionReceived(@NonNull PilotAction action);
 }

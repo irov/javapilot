@@ -5,7 +5,8 @@ public enum PilotLogLevel {
     INFO("info"),
     WARNING("warning"),
     ERROR("error"),
-    CRITICAL("critical");
+    CRITICAL("critical"),
+    EXCEPTION("exception");
 
     private final String m_value;
 

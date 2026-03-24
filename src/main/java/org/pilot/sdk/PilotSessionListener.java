@@ -8,20 +8,20 @@ import androidx.annotation.NonNull;
  */
 public interface PilotSessionListener {
     /** SDK is connecting to the server. */
-    default void onConnecting() {}
+    default void onPilotSessionConnecting() {}
 
     /** Connection request sent, waiting for dashboard approval. */
-    default void onWaitingApproval(@NonNull String requestId) {}
+    default void onPilotSessionWaitingApproval(@NonNull String requestId) {}
 
     /** Session approved and active. Ready to send panel/logs and receive actions. */
-    default void onSessionStarted(@NonNull String sessionToken) {}
+    default void onPilotSessionStarted(@NonNull String sessionToken) {}
 
     /** Session closed (either by client or server). */
-    default void onSessionClosed() {}
+    default void onPilotSessionClosed() {}
 
     /** Connection request was rejected by a dashboard user. */
-    default void onRejected() {}
+    default void onPilotSessionRejected() {}
 
     /** An error occurred. The session may still be running (transient errors). */
-    default void onError(@NonNull PilotException exception) {}
+    default void onPilotSessionError(@NonNull PilotException exception) {}
 }
