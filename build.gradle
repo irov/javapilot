@@ -1,5 +1,5 @@
 plugins {
-    id 'com.android.library'
+    id 'com.android.library' version '8.5.2'
     id 'maven-publish'
 }
 
@@ -39,11 +39,13 @@ afterEvaluate {
     publishing {
         publications {
             release(MavenPublication) {
-                from components.release
-
                 groupId = 'org.pilot'
                 artifactId = 'pilot-sdk'
                 version = project.version
+
+                afterEvaluate {
+                    from components.findByName('release')
+                }
 
                 pom {
                     name = 'Pilot SDK'
