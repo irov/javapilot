@@ -1,0 +1,3 @@
+-keep class org.pilot.sdk.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**
