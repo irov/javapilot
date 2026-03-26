@@ -43,13 +43,13 @@ dependencies {
 PilotSessionAttributeBuilder sessionAttrs = new PilotSessionAttributeBuilder()
     .put("is_debug", BuildConfig.DEBUG)          // boolean
     .put("install_version", 42)                  // int
-    .put("user_score", 3.14f)                    // float
     .put("referrer", null)                       // null
     .putProvider("user_id", () -> getUserId());   // dynamic provider
 
 // Log attributes — attached to every log entry
 PilotLogAttributeBuilder logAttrs = new PilotLogAttributeBuilder()
     .put("build_type", "debug")
+    .putProvider("user_score", () -> game.getScore())  // float, changes dynamically
     .putProvider("screen_name", () -> getCurrentScreen());
 
 // Initialize
@@ -104,18 +104,18 @@ Pilot.connect();
 
 ```java
 // Simple log
-Pilot.log("info", "Game started");
+Pilot.log(PilotLogLevel.INFO, "Game started");
 
 // Log with category and thread
-Pilot.log("warning", "Low memory", "system", "main");
+Pilot.log(PilotLogLevel.WARNING, "Low memory", "system", "main");
 
 // Log with metadata
 JSONObject meta = new JSONObject();
 meta.put("heap_mb", Runtime.getRuntime().totalMemory() / 1024 / 1024);
-Pilot.log("error", "OOM crash", meta);
+Pilot.log(PilotLogLevel.ERROR, "OOM crash", meta);
 
 // Full log call
-Pilot.log("error", "Crash detected", "crashes", "worker-3", meta);
+Pilot.log(PilotLogLevel.ERROR, "Crash detected", "crashes", "worker-3", meta);
 ```
 
 ## Custom logger
