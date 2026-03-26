@@ -66,7 +66,6 @@ public final class PilotUI {
      * @return The new tab for building its layout
      */
     @NonNull
-    @NonNull
     public PilotTab addTab(@NonNull String id, @NonNull String title) {
         m_tabs.removeIf(t -> t.getId().equals(id));
         PilotTab tab = new PilotTab(this, id, title);
@@ -78,7 +77,6 @@ public final class PilotUI {
     /**
      * Get an existing tab by id.
      */
-    @Nullable
     @Nullable
     public PilotTab getTab(@NonNull String id) {
         for (PilotTab tab : m_tabs) {
@@ -177,7 +175,6 @@ public final class PilotUI {
 
     // ── Serialization ──
 
-    @NonNull
     @NonNull
     public JSONObject toJson() {
         JSONObject json = new JSONObject();
