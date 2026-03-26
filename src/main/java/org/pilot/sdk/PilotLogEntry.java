@@ -27,20 +27,28 @@ public final class PilotLogEntry {
     private final String m_category;
     private final String m_thread;
     private final JSONObject m_metadata;
+    private final JSONObject m_attributes;
     private final String m_clientTimestamp;
 
     public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message, @Nullable JSONObject metadata) {
-        this(level, message, null, null, metadata);
+        this(level, message, null, null, metadata, null);
     }
 
     public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message,
                          @Nullable String category, @Nullable String thread,
                          @Nullable JSONObject metadata) {
+        this(level, message, category, thread, metadata, null);
+    }
+
+    public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message,
+                         @Nullable String category, @Nullable String thread,
+                         @Nullable JSONObject metadata, @Nullable JSONObject attributes) {
         m_level = level.getValue();
         m_message = message;
         m_category = category;
         m_thread = thread;
         m_metadata = metadata;
+        m_attributes = attributes;
 
         synchronized (ISO_FORMAT) {
             m_clientTimestamp = ISO_FORMAT.format(new Date());
@@ -48,16 +56,23 @@ public final class PilotLogEntry {
     }
 
     public PilotLogEntry(@NonNull String level, @NonNull String message, @Nullable JSONObject metadata) {
-        this(level, message, null, null, metadata);
+        this(level, message, null, null, metadata, null);
     }
 
     public PilotLogEntry(@NonNull String level, @NonNull String message,
                          @Nullable String category, @Nullable String thread,
                          @Nullable JSONObject metadata) {
+        this(level, message, category, thread, metadata, null);
+    }
+
+    public PilotLogEntry(@NonNull String level, @NonNull String message,
+                         @Nullable String category, @Nullable String thread,
+                         @Nullable JSONObject metadata, @Nullable JSONObject attributes) {
         m_level = level;
         m_message = message;
         m_category = category;
         m_thread = thread;
+        m_attributes = attributes;
         m_metadata = metadata;
 
         synchronized (ISO_FORMAT) {
@@ -113,6 +128,10 @@ public final class PilotLogEntry {
 
             if (m_metadata != null) {
                 json.put("metadata", m_metadata);
+            }
+
+            if (m_attributes != null) {
+                json.put("attributes", m_attributes);
             }
         } catch (JSONException ignored) {
         }

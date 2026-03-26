@@ -149,8 +149,7 @@ final class PilotHttpClient {
     }
 
 
-    void sendLogs(@NonNull String sessionToken, @NonNull List<PilotLogEntry> logs,
-                  @Nullable JSONObject attributes) throws PilotException {
+    void sendLogs(@NonNull String sessionToken, @NonNull List<PilotLogEntry> logs) throws PilotException {
         if (logs.isEmpty()) {
             return;
         }
@@ -163,9 +162,6 @@ final class PilotHttpClient {
         JSONObject body = new JSONObject();
         try {
             body.put("logs", logsArray);
-            if (attributes != null) {
-                body.put("attributes", attributes);
-            }
         } catch (JSONException e) {
             throw new PilotException("Failed to build logs request", e);
         }

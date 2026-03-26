@@ -217,11 +217,12 @@ public final class Pilot {
 
     /**
      * Send a log entry to the Pilot server. Logs are buffered and sent in batches.
+     * Log attributes are resolved at call time.
      */
     public static void log(@NonNull PilotLogLevel level, @NonNull String message) {
         Pilot p = s_instance;
         if (p != null) {
-            p.m_logBuffer.add(new PilotLogEntry(level, message, null));
+            p.m_logBuffer.add(new PilotLogEntry(level, message, null, null, null, p.resolveLogAttributes()));
         }
     }
 
@@ -232,7 +233,7 @@ public final class Pilot {
                            @Nullable String category, @Nullable String thread) {
         Pilot p = s_instance;
         if (p != null) {
-            p.m_logBuffer.add(new PilotLogEntry(level, message, category, thread, null));
+            p.m_logBuffer.add(new PilotLogEntry(level, message, category, thread, null, p.resolveLogAttributes()));
         }
     }
 
@@ -242,7 +243,7 @@ public final class Pilot {
     public static void log(@NonNull PilotLogLevel level, @NonNull String message, @Nullable JSONObject metadata) {
         Pilot p = s_instance;
         if (p != null) {
-            p.m_logBuffer.add(new PilotLogEntry(level, message, metadata));
+            p.m_logBuffer.add(new PilotLogEntry(level, message, null, null, metadata, p.resolveLogAttributes()));
         }
     }
 
@@ -254,7 +255,7 @@ public final class Pilot {
                            @Nullable JSONObject metadata) {
         Pilot p = s_instance;
         if (p != null) {
-            p.m_logBuffer.add(new PilotLogEntry(level, message, category, thread, metadata));
+            p.m_logBuffer.add(new PilotLogEntry(level, message, category, thread, metadata, p.resolveLogAttributes()));
         }
     }
 
@@ -666,26 +667,8 @@ public final class Pilot {
             m_logBuffer.clear();
         }
 
-        // Resolve dynamic log attributes
-        JSONObject attributes = null;
-        if (!m_logAttributeProviders.isEmpty()) {
-            attributes = new JSONObject();
-            for (Map.Entry<String, PilotLogAttributeProvider> entry : m_logAttributeProviders.entrySet()) {
-                try {
-                    String value = entry.getValue().resolve();
-                    if (value != null) {
-                        attributes.put(entry.getKey(), value);
-                    }
-                } catch (Exception ignored) {
-                }
-            }
-            if (attributes.length() == 0) {
-                attributes = null;
-            }
-        }
-
         try {
-            m_httpClient.sendLogs(sessionToken, batch, attributes);
+            m_httpClient.sendLogs(sessionToken, batch);
         } catch (PilotException e) {
             PilotLog.e("Failed to flush logs", e);
             // Re-add failed logs to buffer
@@ -693,6 +676,30 @@ public final class Pilot {
                 m_logBuffer.addAll(0, batch);
             }
         }
+    }
+
+    @Nullable
+    private JSONObject resolveLogAttributes() {
+        if (m_logAttributeProviders.isEmpty()) {
+            return null;
+        }
+
+        JSONObject attributes = new JSONObject();
+        for (Map.Entry<String, PilotLogAttributeProvider> entry : m_logAttributeProviders.entrySet()) {
+            try {
+                String value = entry.getValue().resolve();
+                if (value != null) {
+                    attributes.put(entry.getKey(), value);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (attributes.length() == 0) {
+            return null;
+        }
+
+        return attributes;
     }
 
     private Map<String, String> resolveAllSessionAttributes() {
