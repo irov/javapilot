@@ -6,27 +6,27 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Builder for session attributes — both static values and dynamic providers.
+ * Builder for log attributes — both static values and dynamic providers.
+ * Static values are fixed at build time; dynamic providers are resolved at each log() call.
  *
  * <pre>{@code
- * PilotSessionAttributeBuilder attrs = new PilotSessionAttributeBuilder()
- *     .put("install_id", installId)
- *     .put("session_index", sessionIndex)
- *     .putProvider("acquisition_network", application::getAcquisitionNetwork);
+ * PilotLogAttributeBuilder logAttrs = new PilotLogAttributeBuilder()
+ *     .put("app_version", BuildConfig.VERSION_NAME)
+ *     .putProvider("screen_type", () -> getScreenType());
  * }</pre>
  */
-public final class PilotSessionAttributeBuilder {
+public final class PilotLogAttributeBuilder {
     private final Map<String, String> m_staticAttributes = new LinkedHashMap<>();
     private final Map<String, PilotValueProvider> m_dynamicAttributes = new LinkedHashMap<>();
 
     @NonNull
-    public PilotSessionAttributeBuilder put(@NonNull String key, @NonNull Object value) {
+    public PilotLogAttributeBuilder put(@NonNull String key, @NonNull Object value) {
         m_staticAttributes.put(key, String.valueOf(value));
         return this;
     }
 
     @NonNull
-    public PilotSessionAttributeBuilder putProvider(@NonNull String key, @NonNull PilotValueProvider provider) {
+    public PilotLogAttributeBuilder putProvider(@NonNull String key, @NonNull PilotValueProvider provider) {
         m_dynamicAttributes.put(key, provider);
         return this;
     }

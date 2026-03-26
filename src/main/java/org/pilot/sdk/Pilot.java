@@ -76,7 +76,6 @@ public final class Pilot {
     private final AtomicBoolean m_running = new AtomicBoolean(false);
 
     private final List<PilotLogEntry> m_logBuffer = Collections.synchronizedList(new ArrayList<>());
-    private final Map<String, PilotLogAttributeProvider> m_logAttributeProviders = new ConcurrentHashMap<>();
     private final Map<String, String> m_sessionAttributeCache = new ConcurrentHashMap<>();
 
     private final CopyOnWriteArrayList<PilotActionListener> m_actionListeners = new CopyOnWriteArrayList<>();
@@ -266,28 +265,6 @@ public final class Pilot {
         Pilot p = s_instance;
         if (p != null) {
             p.m_logBuffer.add(entry);
-        }
-    }
-
-    /**
-     * Register a dynamic log attribute provider. On each log flush, the provider
-     * is called to resolve the current value for this attribute key.
-     * All resolved attributes are sent alongside the log batch.
-     */
-    public static void addLogAttribute(@NonNull String key, @NonNull PilotLogAttributeProvider provider) {
-        Pilot p = s_instance;
-        if (p != null) {
-            p.m_logAttributeProviders.put(key, provider);
-        }
-    }
-
-    /**
-     * Remove a dynamic log attribute provider.
-     */
-    public static void removeLogAttribute(@NonNull String key) {
-        Pilot p = s_instance;
-        if (p != null) {
-            p.m_logAttributeProviders.remove(key);
         }
     }
 
@@ -680,16 +657,27 @@ public final class Pilot {
 
     @Nullable
     private JSONObject resolveLogAttributes() {
-        if (m_logAttributeProviders.isEmpty()) {
+        PilotLogAttributeBuilder builder = m_config.logAttributes;
+        Map<String, String> staticAttrs = builder.getStaticAttributes();
+        Map<String, PilotValueProvider> dynamicAttrs = builder.getDynamicAttributes();
+
+        if (staticAttrs.isEmpty() && dynamicAttrs.isEmpty()) {
             return null;
         }
 
         JSONObject attributes = new JSONObject();
-        for (Map.Entry<String, PilotLogAttributeProvider> entry : m_logAttributeProviders.entrySet()) {
+        try {
+            for (Map.Entry<String, String> entry : staticAttrs.entrySet()) {
+                attributes.put(entry.getKey(), entry.getValue());
+            }
+        } catch (Exception ignored) {
+        }
+
+        for (Map.Entry<String, PilotValueProvider> entry : dynamicAttrs.entrySet()) {
             try {
-                String value = entry.getValue().resolve();
+                Object value = entry.getValue().getValue();
                 if (value != null) {
-                    attributes.put(entry.getKey(), value);
+                    attributes.put(entry.getKey(), String.valueOf(value));
                 }
             } catch (Exception ignored) {
             }

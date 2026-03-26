@@ -21,6 +21,7 @@ public final class PilotConfig {
     final PilotSessionListener sessionListener;
     final PilotActionListener actionListener;
     final PilotSessionAttributeBuilder sessionAttributes;
+    final PilotLogAttributeBuilder logAttributes;
 
     private PilotConfig(Builder builder) {
         this.baseUrl = builder.baseUrl;
@@ -37,6 +38,7 @@ public final class PilotConfig {
         this.sessionListener = builder.sessionListener;
         this.actionListener = builder.actionListener;
         this.sessionAttributes = builder.sessionAttributes;
+        this.logAttributes = builder.logAttributes;
     }
 
     @NonNull
@@ -74,6 +76,7 @@ public final class PilotConfig {
         private PilotSessionListener sessionListener = null;
         private PilotActionListener actionListener = null;
         private PilotSessionAttributeBuilder sessionAttributes = new PilotSessionAttributeBuilder();
+        private PilotLogAttributeBuilder logAttributes = new PilotLogAttributeBuilder();
 
         /**
          * @param baseUrl  Pilot server URL, e.g. "https://pilot.example.com"
@@ -159,6 +162,15 @@ public final class PilotConfig {
          */
         public Builder setSessionAttributes(@NonNull PilotSessionAttributeBuilder builder) {
             this.sessionAttributes = builder;
+            return this;
+        }
+
+        /**
+         * Set log attributes (static and dynamic) via a builder.
+         * Static values are fixed; dynamic providers are resolved at each log() call.
+         */
+        public Builder setLogAttributes(@NonNull PilotLogAttributeBuilder builder) {
+            this.logAttributes = builder;
             return this;
         }
 
