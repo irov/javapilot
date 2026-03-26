@@ -7,13 +7,13 @@ import androidx.annotation.NonNull;
  * Called on the SDK poll thread — keep implementations lightweight.
  *
  * <pre>{@code
- * root.addStat("stat-fps", "FPS")
+ * root.addStat("FPS")
  *     .unit("fps")
- *     .valueProvider(() -> String.valueOf(game.getFps()));
+ *     .valueProvider(() -> game.getFps());
  * }</pre>
  */
 @FunctionalInterface
 public interface PilotValueProvider {
     @NonNull
-    String getValue();
+    Object getValue();
 }

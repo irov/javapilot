@@ -91,7 +91,7 @@ public class PilotWidget<T extends PilotWidget<T>> {
     boolean pollProvider() {
         if (m_provider == null) return false;
         try {
-            String newValue = m_provider.getValue();
+            String newValue = String.valueOf(m_provider.getValue());
             if (!Objects.equals(newValue, m_cachedValue)) {
                 m_cachedValue = newValue;
                 try {
