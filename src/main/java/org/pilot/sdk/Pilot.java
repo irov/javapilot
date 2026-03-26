@@ -46,7 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * // 3. Build UI
  * PilotUI ui = Pilot.getUI();
- * PilotTab tab = ui.addTab("controls", "Controls");
+ * PilotTab tab = ui.addTab("Controls");
  * PilotLayout root = tab.vertical();
  * root.addButton("Restart")
  *     .variant("contained").color("error")

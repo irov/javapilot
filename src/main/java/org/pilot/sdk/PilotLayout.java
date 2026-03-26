@@ -74,6 +74,18 @@ public final class PilotLayout {
         return sub;
     }
 
+    /**
+     * Add a collapsible section with a title. Children are hidden until expanded.
+     * Returns a vertical layout inside the collapsible.
+     */
+    @NonNull
+    public PilotLayout addCollapsible(@NonNull String title) {
+        CollapsibleElement collapsible = new CollapsibleElement(m_ui, title);
+        m_children.add(collapsible);
+        m_ui.incrementRevision();
+        return collapsible.m_content;
+    }
+
     // ── Padding ──
 
     @NonNull
@@ -174,6 +186,8 @@ public final class PilotLayout {
                     childrenArr.put(((PilotWidget<?>) child).toJson());
                 } else if (child instanceof PaddingElement) {
                     childrenArr.put(((PaddingElement) child).toJson());
+                } else if (child instanceof CollapsibleElement) {
+                    childrenArr.put(((CollapsibleElement) child).toJson());
                 }
             }
             json.put("children", childrenArr);
@@ -196,6 +210,29 @@ public final class PilotLayout {
             try {
                 json.put("type", "padding");
                 json.put("weight", weight);
+            } catch (JSONException ignored) {
+            }
+            return json;
+        }
+    }
+
+    // ── Collapsible helper ──
+
+    static final class CollapsibleElement {
+        final String title;
+        final PilotLayout m_content;
+
+        CollapsibleElement(@NonNull PilotUI ui, @NonNull String title) {
+            this.title = title;
+            this.m_content = new PilotLayout(ui, Direction.VERTICAL);
+        }
+
+        JSONObject toJson() {
+            JSONObject json = new JSONObject();
+            try {
+                json.put("type", "collapsible");
+                json.put("title", title);
+                json.put("children", m_content.toJson().optJSONArray("children"));
             } catch (JSONException ignored) {
             }
             return json;

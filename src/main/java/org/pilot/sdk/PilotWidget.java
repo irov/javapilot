@@ -26,6 +26,7 @@ public class PilotWidget<T extends PilotWidget<T>> {
     PilotWidget(@NonNull PilotUI ui, @NonNull String type) {
         m_ui = ui;
         m_internalId = ui.nextId();
+        m_publicId = type + "-" + m_internalId;
         m_type = type;
         m_json = new JSONObject();
         try {
@@ -37,11 +38,7 @@ public class PilotWidget<T extends PilotWidget<T>> {
 
     @NonNull
     public String getId() {
-        if (m_publicId != null) {
-            return m_publicId;
-        }
-
-        return String.valueOf(m_internalId);
+        return m_publicId;
     }
 
     public int getInternalId() {

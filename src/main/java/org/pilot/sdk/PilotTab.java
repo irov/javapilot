@@ -8,24 +8,36 @@ import org.json.JSONObject;
 
 /**
  * A tab in the Pilot dashboard UI.
- * Each service/module adds its own tab via {@link PilotUI#addTab}.
+ * Each service/module adds its own tab via {@link PilotUI#addTab(String)}.
  * Call {@link #vertical()} or {@link #horizontal()} to set the root layout direction.
  */
 public final class PilotTab {
     private final PilotUI m_ui;
-    private final String m_id;
+    private final int m_internalId;
+    private String m_publicId;
     private final String m_title;
     private PilotLayout m_layout;
 
-    PilotTab(@NonNull PilotUI ui, @NonNull String id, @NonNull String title) {
+    PilotTab(@NonNull PilotUI ui, @NonNull String title) {
         m_ui = ui;
-        m_id = id;
+        m_internalId = ui.nextId();
+        m_publicId = "tab-" + m_internalId;
         m_title = title;
     }
 
     @NonNull
     public String getId() {
-        return m_id;
+        return m_publicId;
+    }
+
+    @NonNull
+    public PilotTab setId(@NonNull String id) {
+        m_publicId = id;
+        return this;
+    }
+
+    public int getInternalId() {
+        return m_internalId;
     }
 
     @NonNull
@@ -63,7 +75,7 @@ public final class PilotTab {
     JSONObject toJson() {
         JSONObject json = new JSONObject();
         try {
-            json.put("id", m_id);
+            json.put("id", m_internalId);
             json.put("title", m_title);
             if (m_layout != null) {
                 json.put("layout", m_layout.toJson());

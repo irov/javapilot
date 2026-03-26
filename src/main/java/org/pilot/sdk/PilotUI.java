@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <pre>{@code
  * PilotUI ui = Pilot.getUI();
  *
- * PilotTab tab = ui.addTab("game", "Game Controls");
+ * PilotTab tab = ui.addTab("Game Controls");
  * PilotLayout root = tab.vertical();
  *
  * root.addButton("Restart")
@@ -59,23 +59,22 @@ public final class PilotUI {
     // ── Tab management ──
 
     /**
-     * Add a new tab (or replace an existing one with the same id).
+     * Add a new tab (or replace an existing one with the same title).
      *
-     * @param id    Unique tab identifier
-     * @param title Tab display title
+     * @param title Tab display title (also used as default id)
      * @return The new tab for building its layout
      */
     @NonNull
-    public PilotTab addTab(@NonNull String id, @NonNull String title) {
-        m_tabs.removeIf(t -> t.getId().equals(id));
-        PilotTab tab = new PilotTab(this, id, title);
+    public PilotTab addTab(@NonNull String title) {
+        m_tabs.removeIf(t -> t.getTitle().equals(title));
+        PilotTab tab = new PilotTab(this, title);
         m_tabs.add(tab);
         m_revision.incrementAndGet();
         return tab;
     }
 
     /**
-     * Get an existing tab by id.
+     * Get an existing tab by public id.
      */
     @Nullable
     public PilotTab getTab(@NonNull String id) {
@@ -88,7 +87,7 @@ public final class PilotUI {
     }
 
     /**
-     * Remove a tab by id.
+     * Remove a tab by public id.
      */
     public void removeTab(@NonNull String id) {
         m_tabs.removeIf(t -> t.getId().equals(id));
