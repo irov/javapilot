@@ -13,6 +13,8 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -74,6 +76,7 @@ public final class Pilot {
     private final AtomicBoolean m_running = new AtomicBoolean(false);
 
     private final List<PilotLogEntry> m_logBuffer = Collections.synchronizedList(new ArrayList<>());
+    private final Map<String, PilotLogAttributeProvider> m_logAttributeProviders = new ConcurrentHashMap<>();
 
     private final CopyOnWriteArrayList<PilotActionListener> m_actionListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<PilotSessionListener> m_sessionListeners = new CopyOnWriteArrayList<>();
@@ -222,6 +225,17 @@ public final class Pilot {
     }
 
     /**
+     * Send a log entry with category and thread.
+     */
+    public static void log(@NonNull PilotLogLevel level, @NonNull String message,
+                           @Nullable String category, @Nullable String thread) {
+        Pilot p = s_instance;
+        if (p != null) {
+            p.m_logBuffer.add(new PilotLogEntry(level, message, category, thread, null));
+        }
+    }
+
+    /**
      * Send a log entry with metadata.
      */
     public static void log(@NonNull PilotLogLevel level, @NonNull String message, @Nullable JSONObject metadata) {
@@ -232,12 +246,46 @@ public final class Pilot {
     }
 
     /**
+     * Send a log entry with category, thread, and metadata.
+     */
+    public static void log(@NonNull PilotLogLevel level, @NonNull String message,
+                           @Nullable String category, @Nullable String thread,
+                           @Nullable JSONObject metadata) {
+        Pilot p = s_instance;
+        if (p != null) {
+            p.m_logBuffer.add(new PilotLogEntry(level, message, category, thread, metadata));
+        }
+    }
+
+    /**
      * Send a pre-built log entry.
      */
     public static void log(@NonNull PilotLogEntry entry) {
         Pilot p = s_instance;
         if (p != null) {
             p.m_logBuffer.add(entry);
+        }
+    }
+
+    /**
+     * Register a dynamic log attribute provider. On each log flush, the provider
+     * is called to resolve the current value for this attribute key.
+     * All resolved attributes are sent alongside the log batch.
+     */
+    public static void addLogAttribute(@NonNull String key, @NonNull PilotLogAttributeProvider provider) {
+        Pilot p = s_instance;
+        if (p != null) {
+            p.m_logAttributeProviders.put(key, provider);
+        }
+    }
+
+    /**
+     * Remove a dynamic log attribute provider.
+     */
+    public static void removeLogAttribute(@NonNull String key) {
+        Pilot p = s_instance;
+        if (p != null) {
+            p.m_logAttributeProviders.remove(key);
         }
     }
 
@@ -390,7 +438,7 @@ public final class Pilot {
             deviceName = Build.MODEL + " (Android " + Build.VERSION.RELEASE + ")";
         }
 
-        PilotConnectResponse resp = m_httpClient.connect(deviceId, deviceName);
+        PilotConnectResponse resp = m_httpClient.connect(deviceId, deviceName, m_config.sessionAttributes);
         m_requestId.set(resp.getRequestId());
 
         PilotLog.i("Connect request sent, request_id=%s, status=%s", resp.getRequestId(), resp.getStatus());
@@ -614,8 +662,26 @@ public final class Pilot {
             m_logBuffer.clear();
         }
 
+        // Resolve dynamic log attributes
+        JSONObject attributes = null;
+        if (!m_logAttributeProviders.isEmpty()) {
+            attributes = new JSONObject();
+            for (Map.Entry<String, PilotLogAttributeProvider> entry : m_logAttributeProviders.entrySet()) {
+                try {
+                    String value = entry.getValue().resolve();
+                    if (value != null) {
+                        attributes.put(entry.getKey(), value);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (attributes.length() == 0) {
+                attributes = null;
+            }
+        }
+
         try {
-            m_httpClient.sendLogs(sessionToken, batch);
+            m_httpClient.sendLogs(sessionToken, batch, attributes);
         } catch (PilotException e) {
             PilotLog.e("Failed to flush logs", e);
             // Re-add failed logs to buffer

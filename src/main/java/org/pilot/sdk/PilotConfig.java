@@ -3,6 +3,9 @@ package org.pilot.sdk;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Configuration for {@link Pilot} initialization.
  */
@@ -20,6 +23,7 @@ public final class PilotConfig {
     final boolean autoConnect;
     final PilotSessionListener sessionListener;
     final PilotActionListener actionListener;
+    final Map<String, String> sessionAttributes;
 
     private PilotConfig(Builder builder) {
         this.baseUrl = builder.baseUrl;
@@ -35,6 +39,7 @@ public final class PilotConfig {
         this.autoConnect = builder.autoConnect;
         this.sessionListener = builder.sessionListener;
         this.actionListener = builder.actionListener;
+        this.sessionAttributes = builder.sessionAttributes;
     }
 
     @NonNull
@@ -71,6 +76,7 @@ public final class PilotConfig {
         private boolean autoConnect = true;
         private PilotSessionListener sessionListener = null;
         private PilotActionListener actionListener = null;
+        private final Map<String, String> sessionAttributes = new HashMap<>();
 
         /**
          * @param baseUrl  Pilot server URL, e.g. "https://pilot.example.com"
@@ -148,6 +154,15 @@ public final class PilotConfig {
          */
         public Builder setActionListener(@Nullable PilotActionListener listener) {
             this.actionListener = listener;
+            return this;
+        }
+
+        /**
+         * Add a static session attribute sent at connect time.
+         * Use for device info, app version, build type, etc.
+         */
+        public Builder setSessionAttribute(@NonNull String key, @NonNull String value) {
+            this.sessionAttributes.put(key, value);
             return this;
         }
 

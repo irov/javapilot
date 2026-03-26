@@ -9,6 +9,7 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.MediaType;
@@ -46,11 +47,19 @@ final class PilotHttpClient {
 
     // ── Client endpoints ──
 
-    PilotConnectResponse connect(@NonNull String deviceId, @NonNull String deviceName) throws PilotException {
+    PilotConnectResponse connect(@NonNull String deviceId, @NonNull String deviceName,
+                                @NonNull Map<String, String> sessionAttributes) throws PilotException {
         JSONObject body = new JSONObject();
         try {
             body.put("device_id", deviceId);
             body.put("device_name", deviceName);
+            if (!sessionAttributes.isEmpty()) {
+                JSONObject attrs = new JSONObject();
+                for (Map.Entry<String, String> entry : sessionAttributes.entrySet()) {
+                    attrs.put(entry.getKey(), entry.getValue());
+                }
+                body.put("session_attributes", attrs);
+            }
         } catch (JSONException e) {
             throw new PilotException("Failed to build connect request", e);
         }
@@ -125,7 +134,8 @@ final class PilotHttpClient {
         execute(request);
     }
 
-    void sendLogs(@NonNull String sessionToken, @NonNull List<PilotLogEntry> logs) throws PilotException {
+    void sendLogs(@NonNull String sessionToken, @NonNull List<PilotLogEntry> logs,
+                  @Nullable JSONObject attributes) throws PilotException {
         if (logs.isEmpty()) {
             return;
         }
@@ -138,6 +148,9 @@ final class PilotHttpClient {
         JSONObject body = new JSONObject();
         try {
             body.put("logs", logsArray);
+            if (attributes != null) {
+                body.put("attributes", attributes);
+            }
         } catch (JSONException e) {
             throw new PilotException("Failed to build logs request", e);
         }

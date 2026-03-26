@@ -24,12 +24,22 @@ public final class PilotLogEntry {
 
     private final String m_level;
     private final String m_message;
+    private final String m_category;
+    private final String m_thread;
     private final JSONObject m_metadata;
     private final String m_clientTimestamp;
 
     public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message, @Nullable JSONObject metadata) {
+        this(level, message, null, null, metadata);
+    }
+
+    public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message,
+                         @Nullable String category, @Nullable String thread,
+                         @Nullable JSONObject metadata) {
         m_level = level.getValue();
         m_message = message;
+        m_category = category;
+        m_thread = thread;
         m_metadata = metadata;
 
         synchronized (ISO_FORMAT) {
@@ -38,8 +48,16 @@ public final class PilotLogEntry {
     }
 
     public PilotLogEntry(@NonNull String level, @NonNull String message, @Nullable JSONObject metadata) {
+        this(level, message, null, null, metadata);
+    }
+
+    public PilotLogEntry(@NonNull String level, @NonNull String message,
+                         @Nullable String category, @Nullable String thread,
+                         @Nullable JSONObject metadata) {
         m_level = level;
         m_message = message;
+        m_category = category;
+        m_thread = thread;
         m_metadata = metadata;
 
         synchronized (ISO_FORMAT) {
@@ -84,6 +102,14 @@ public final class PilotLogEntry {
             json.put("level", m_level);
             json.put("message", m_message);
             json.put("client_timestamp", m_clientTimestamp);
+
+            if (m_category != null) {
+                json.put("category", m_category);
+            }
+
+            if (m_thread != null) {
+                json.put("thread", m_thread);
+            }
 
             if (m_metadata != null) {
                 json.put("metadata", m_metadata);
