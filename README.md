@@ -7,10 +7,13 @@ Lightweight Android SDK for connecting apps to **Pilot** — a real-time remote 
 ## Features
 
 - **Tabs & Layout** — each service adds its own tab with vertical/horizontal layouts
-- **Widgets** — buttons, switches, stats, labels, inputs, selects, tables, logs
+- **Widgets** — buttons, switches, stats, labels, inputs, selects, tables, logs, textareas
 - **Value providers** — widgets auto-update via callbacks, dirty-checked on poll cycle
 - **Remote actions** — trigger commands from dashboard with per-widget callbacks
-- **Log streaming** — send structured logs with levels and metadata
+- **Log streaming** — structured logs with levels, categories, threads, per-entry attributes and metadata
+- **Session attributes** — static and dynamic key-value pairs attached to the session, native types preserved (boolean, int, float, null)
+- **Log attributes** — static and dynamic key-value pairs attached to every log entry
+- **Circular log buffer** — configurable buffer size and batch size for log flushing
 - **Session management** — auto heartbeat, reconnection, lifecycle callbacks
 - **Custom logger** — redirect SDK logs into your own logging system
 - **Zero dependencies on engine** — works with any Android project
@@ -29,19 +32,36 @@ dependencyResolutionManagement {
 
 // build.gradle
 dependencies {
-    implementation 'com.github.irov:javapilot:<version>'
+    implementation 'com.github.irov:javapilot:1.0.14'
 }
 ```
 
 ## Quick start
 
 ```java
+// Session attributes — native types preserved (bool, int, float, null)
+PilotSessionAttributeBuilder sessionAttrs = new PilotSessionAttributeBuilder()
+    .put("is_debug", BuildConfig.DEBUG)          // boolean
+    .put("install_version", 42)                  // int
+    .put("user_score", 3.14f)                    // float
+    .put("referrer", null)                       // null
+    .putProvider("user_id", () -> getUserId());   // dynamic provider
+
+// Log attributes — attached to every log entry
+PilotLogAttributeBuilder logAttrs = new PilotLogAttributeBuilder()
+    .put("build_type", "debug")
+    .putProvider("screen_name", () -> getCurrentScreen());
+
 // Initialize
 PilotConfig config = new PilotConfig.Builder(
         "https://pilot.example.com",
         "plt_your_api_token"
     )
     .setDeviceName("Pixel 8")
+    .setSessionAttributes(sessionAttrs)
+    .setLogAttributes(logAttrs)
+    .setLogBatchSize(100)    // logs per flush cycle (default 100)
+    .setLogBufferSize(1000)  // max buffered logs (default 1000)
     .build();
 
 Pilot.initialize(config);
@@ -78,6 +98,24 @@ root.addLabel("label-status", "Idle")
 // Connect — UI is sent automatically on session start
 // and re-sent when widgets change
 Pilot.connect();
+```
+
+## Logging
+
+```java
+// Simple log
+Pilot.log("info", "Game started");
+
+// Log with category and thread
+Pilot.log("warning", "Low memory", "system", "main");
+
+// Log with metadata
+JSONObject meta = new JSONObject();
+meta.put("heap_mb", Runtime.getRuntime().totalMemory() / 1024 / 1024);
+Pilot.log("error", "OOM crash", meta);
+
+// Full log call
+Pilot.log("error", "Crash detected", "crashes", "worker-3", meta);
 ```
 
 ## Custom logger
