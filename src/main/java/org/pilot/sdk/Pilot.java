@@ -44,11 +44,13 @@ import java.util.concurrent.atomic.AtomicReference;
  *     }
  * });
  *
- * // 3. Build and submit panel
- * PilotPanel panel = new PilotPanel();
- * panel.addSection("controls", "Controls")
- *     .addButton("btn-restart", "Restart", "contained", "error");
- * Pilot.submitPanel(panel);
+ * // 3. Build UI
+ * PilotUI ui = Pilot.getUI();
+ * PilotTab tab = ui.addTab("controls", "Controls");
+ * PilotLayout root = tab.vertical();
+ * root.addButton("Restart")
+ *     .variant("contained").color("error")
+ *     .onClick(action -> restartGame());
  *
  * // 4. Connect
  * Pilot.connect();
@@ -81,7 +83,6 @@ public final class Pilot {
     private ScheduledFuture<?> m_actionPollFuture;
     private ScheduledFuture<?> m_logFlushFuture;
 
-    private PilotPanel m_currentPanel;
     private final PilotUI m_ui = new PilotUI();
     private final Handler m_mainHandler = new Handler(Looper.getMainLooper());
 
@@ -108,8 +109,20 @@ public final class Pilot {
 
         synchronized (Pilot.class) {
             if (s_instance == null) {
-                s_instance = new Pilot(config);
+                Pilot p = new Pilot(config);
+                s_instance = p;
                 PilotLog.i("Pilot SDK initialized (server: %s)", config.baseUrl);
+
+                if (config.sessionListener != null) {
+                    p.m_sessionListeners.add(config.sessionListener);
+                }
+                if (config.actionListener != null) {
+                    p.m_actionListeners.add(config.actionListener);
+                }
+
+                if (config.autoConnect) {
+                    p.startConnection();
+                }
             }
         }
     }
@@ -181,42 +194,7 @@ public final class Pilot {
     }
 
     /**
-     * Submit a debug panel layout. If a session is active, sends immediately.
-     * If not yet connected, the panel will be sent once the session starts.
-     * @deprecated Use {@link #getUI()} with tabs instead. Changes are sent automatically.
-     */
-    @Deprecated
-    public static void submitPanel(@NonNull PilotPanel panel) {
-        Pilot p = requireInstance();
-        p.m_currentPanel = panel;
-
-        String token = p.m_sessionToken.get();
-        if (token != null) {
-            p.doSubmitPanel(token, panel);
-        }
-    }
-
-    /**
-     * Increment panel revision and re-submit. Useful after updating widget values.
-     */
-    public static void updatePanel() {
-        Pilot p = requireInstance();
-        PilotPanel panel = p.m_currentPanel;
-        if (panel != null) {
-            panel.incrementRevision();
-            String token = p.m_sessionToken.get();
-            if (token != null) {
-                p.doSubmitPanel(token, panel);
-            }
-        }
-    }
-
-    /**
-     * Start connecting to the Pilot server. Runs asynchronously.
-     * This will:
-     * 1. POST /api/client/connect
-     * 2. Poll for approval
-     * 3. Once approved — start heartbeat, action polling, and log flushing
+     * Connect to the Pilot server. Runs asynchronously.
      */
     public static void connect() {
         Pilot p = requireInstance();
@@ -356,7 +334,6 @@ public final class Pilot {
         m_actionListeners.clear();
         m_sessionListeners.clear();
         m_logBuffer.clear();
-        m_currentPanel = null;
     }
 
     private void connectAndWaitApproval() {
@@ -412,6 +389,9 @@ public final class Pilot {
             PilotLog.e("Connection failed", e);
             setStatus(PilotSessionStatus.ERROR);
             m_running.set(false);
+            if (e.isUnauthorized()) {
+                notifyAuthFailed();
+            }
             notifyError(e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -426,12 +406,6 @@ public final class Pilot {
         PilotLog.i("Session approved and active");
 
         notifySessionStarted(sessionToken);
-
-        // Send pending panel (legacy)
-        PilotPanel panel = m_currentPanel;
-        if (panel != null) {
-            doSubmitPanel(sessionToken, panel);
-        }
 
         // Send UI (tab-based) if any tabs exist
         if (m_ui.hasTabs()) {
@@ -604,19 +578,6 @@ public final class Pilot {
         });
     }
 
-    private void doSubmitPanel(@NonNull String sessionToken, @NonNull PilotPanel panel) {
-        if (m_executor == null || m_executor.isShutdown()) return;
-        m_executor.execute(() -> {
-            try {
-                m_httpClient.submitPanel(sessionToken, panel.toJson());
-                PilotLog.d("Panel submitted (revision=%d)", panel.getRevision());
-            } catch (PilotException e) {
-                PilotLog.e("Failed to submit panel", e);
-                notifyError(e);
-            }
-        });
-    }
-
     private void flushLogs(@NonNull String sessionToken) {
         if (m_logBuffer.isEmpty()) return;
 
@@ -700,6 +661,12 @@ public final class Pilot {
     private void notifyRejected() {
         for (PilotSessionListener l : m_sessionListeners) {
             l.onPilotSessionRejected();
+        }
+    }
+
+    private void notifyAuthFailed() {
+        for (PilotSessionListener l : m_sessionListeners) {
+            l.onPilotSessionAuthFailed();
         }
     }
 

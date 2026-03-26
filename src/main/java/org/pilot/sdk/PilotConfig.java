@@ -17,6 +17,9 @@ public final class PilotConfig {
     final long logFlushIntervalMs;
     final PilotLogLevel logLevel;
     final PilotLogger logger;
+    final boolean autoConnect;
+    final PilotSessionListener sessionListener;
+    final PilotActionListener actionListener;
 
     private PilotConfig(Builder builder) {
         this.baseUrl = builder.baseUrl;
@@ -29,6 +32,9 @@ public final class PilotConfig {
         this.logFlushIntervalMs = builder.logFlushIntervalMs;
         this.logLevel = builder.logLevel;
         this.logger = builder.logger;
+        this.autoConnect = builder.autoConnect;
+        this.sessionListener = builder.sessionListener;
+        this.actionListener = builder.actionListener;
     }
 
     @NonNull
@@ -62,6 +68,9 @@ public final class PilotConfig {
         private long logFlushIntervalMs = 5000;
         private PilotLogLevel logLevel = PilotLogLevel.INFO;
         private PilotLogger logger = null;
+        private boolean autoConnect = true;
+        private PilotSessionListener sessionListener = null;
+        private PilotActionListener actionListener = null;
 
         /**
          * @param baseUrl  Pilot server URL, e.g. "https://pilot.example.com"
@@ -113,6 +122,32 @@ public final class PilotConfig {
          */
         public Builder setLogger(@Nullable PilotLogger logger) {
             this.logger = logger;
+            return this;
+        }
+
+        /**
+         * Whether to connect automatically on {@link Pilot#initialize}.
+         * If false, {@link Pilot#connect()} must be called explicitly.
+         * Default: true.
+         */
+        public Builder setAutoConnect(boolean autoConnect) {
+            this.autoConnect = autoConnect;
+            return this;
+        }
+
+        /**
+         * Set a listener for session lifecycle events (connecting, approved, error, etc.).
+         */
+        public Builder setSessionListener(@Nullable PilotSessionListener listener) {
+            this.sessionListener = listener;
+            return this;
+        }
+
+        /**
+         * Set a listener for actions received from the dashboard.
+         */
+        public Builder setActionListener(@Nullable PilotActionListener listener) {
+            this.actionListener = listener;
             return this;
         }
 
