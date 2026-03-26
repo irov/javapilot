@@ -22,6 +22,8 @@ public final class PilotConfig {
     final PilotActionListener actionListener;
     final PilotSessionAttributeBuilder sessionAttributes;
     final PilotLogAttributeBuilder logAttributes;
+    final int logBatchSize;
+    final int logBufferSize;
 
     private PilotConfig(Builder builder) {
         this.baseUrl = builder.baseUrl;
@@ -39,6 +41,8 @@ public final class PilotConfig {
         this.actionListener = builder.actionListener;
         this.sessionAttributes = builder.sessionAttributes;
         this.logAttributes = builder.logAttributes;
+        this.logBatchSize = builder.logBatchSize;
+        this.logBufferSize = builder.logBufferSize;
     }
 
     @NonNull
@@ -77,6 +81,8 @@ public final class PilotConfig {
         private PilotActionListener actionListener = null;
         private PilotSessionAttributeBuilder sessionAttributes = new PilotSessionAttributeBuilder();
         private PilotLogAttributeBuilder logAttributes = new PilotLogAttributeBuilder();
+        private int logBatchSize = 100;
+        private int logBufferSize = 1000;
 
         /**
          * @param baseUrl  Pilot server URL, e.g. "https://pilot.example.com"
@@ -171,6 +177,16 @@ public final class PilotConfig {
          */
         public Builder setLogAttributes(@NonNull PilotLogAttributeBuilder builder) {
             this.logAttributes = builder;
+            return this;
+        }
+
+        public Builder setLogBatchSize(int size) {
+            this.logBatchSize = size;
+            return this;
+        }
+
+        public Builder setLogBufferSize(int size) {
+            this.logBufferSize = size;
             return this;
         }
 

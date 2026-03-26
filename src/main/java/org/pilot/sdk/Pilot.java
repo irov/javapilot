@@ -78,6 +78,7 @@ public final class Pilot {
     private final AtomicBoolean m_running = new AtomicBoolean(false);
 
     private final List<PilotLogEntry> m_logBuffer = Collections.synchronizedList(new ArrayList<>());
+    private final AtomicBoolean m_logOverflowWarned = new AtomicBoolean(false);
     private final Map<String, String> m_sessionAttributeCache = new ConcurrentHashMap<>();
 
     private final CopyOnWriteArrayList<PilotActionListener> m_actionListeners = new CopyOnWriteArrayList<>();
@@ -223,7 +224,7 @@ public final class Pilot {
     public static void log(@NonNull PilotLogLevel level, @NonNull String message) {
         Pilot p = s_instance;
         if (p != null) {
-            p.m_logBuffer.add(new PilotLogEntry(level, message, null, null, null, p.resolveLogAttributes()));
+            p.bufferLog(new PilotLogEntry(level, message, null, null, null, p.resolveLogAttributes()));
         }
     }
 
@@ -234,7 +235,7 @@ public final class Pilot {
                            @Nullable String category, @Nullable String thread) {
         Pilot p = s_instance;
         if (p != null) {
-            p.m_logBuffer.add(new PilotLogEntry(level, message, category, thread, null, p.resolveLogAttributes()));
+            p.bufferLog(new PilotLogEntry(level, message, category, thread, null, p.resolveLogAttributes()));
         }
     }
 
@@ -244,7 +245,7 @@ public final class Pilot {
     public static void log(@NonNull PilotLogLevel level, @NonNull String message, @Nullable JSONObject metadata) {
         Pilot p = s_instance;
         if (p != null) {
-            p.m_logBuffer.add(new PilotLogEntry(level, message, null, null, metadata, p.resolveLogAttributes()));
+            p.bufferLog(new PilotLogEntry(level, message, null, null, metadata, p.resolveLogAttributes()));
         }
     }
 
@@ -256,7 +257,7 @@ public final class Pilot {
                            @Nullable JSONObject metadata) {
         Pilot p = s_instance;
         if (p != null) {
-            p.m_logBuffer.add(new PilotLogEntry(level, message, category, thread, metadata, p.resolveLogAttributes()));
+            p.bufferLog(new PilotLogEntry(level, message, category, thread, metadata, p.resolveLogAttributes()));
         }
     }
 
@@ -266,7 +267,7 @@ public final class Pilot {
     public static void log(@NonNull PilotLogEntry entry) {
         Pilot p = s_instance;
         if (p != null) {
-            p.m_logBuffer.add(entry);
+            p.bufferLog(entry);
         }
     }
 
@@ -637,33 +638,46 @@ public final class Pilot {
         });
     }
 
-    private static final int MAX_BATCH_SIZE = 100;
+    private void bufferLog(@NonNull PilotLogEntry entry) {
+        synchronized (m_logBuffer) {
+            if (m_logBuffer.size() >= m_config.logBufferSize) {
+                m_logBuffer.remove(0);
+
+                if (m_logOverflowWarned.compareAndSet(false, true)) {
+                    PilotLog.w("Log buffer overflow (" + m_config.logBufferSize + "), dropping oldest entries");
+                }
+            }
+
+            m_logBuffer.add(entry);
+        }
+    }
 
     private void flushLogs(@NonNull String sessionToken) {
         if (m_logBuffer.isEmpty()) return;
 
-        List<PilotLogEntry> batch;
+        List<PilotLogEntry> chunk;
         synchronized (m_logBuffer) {
-            batch = new ArrayList<>(m_logBuffer);
-            m_logBuffer.clear();
+            int count = Math.min(m_logBuffer.size(), m_config.logBatchSize);
+            chunk = new ArrayList<>(m_logBuffer.subList(0, count));
+            m_logBuffer.subList(0, count).clear();
         }
 
-        for (int i = 0; i < batch.size(); i += MAX_BATCH_SIZE) {
-            List<PilotLogEntry> chunk = batch.subList(i, Math.min(i + MAX_BATCH_SIZE, batch.size()));
-            try {
-                m_httpClient.sendLogs(sessionToken, chunk);
-            } catch (PilotException e) {
-                PilotLog.e("Failed to flush logs", e);
+        try {
+            m_httpClient.sendLogs(sessionToken, chunk);
 
-                if (e.isNetworkError() || e.getHttpCode() >= 500) {
-                    // Server/network error — re-add remaining unsent logs
-                    List<PilotLogEntry> remaining = batch.subList(i, batch.size());
-                    synchronized (m_logBuffer) {
-                        m_logBuffer.addAll(0, remaining);
+            m_logOverflowWarned.set(false);
+        } catch (PilotException e) {
+            PilotLog.e("Failed to flush logs", e);
+
+            if (e.isNetworkError() || e.getHttpCode() >= 500) {
+                synchronized (m_logBuffer) {
+                    m_logBuffer.addAll(0, chunk);
+
+                    // Trim to max buffer size
+                    while (m_logBuffer.size() > m_config.logBufferSize) {
+                        m_logBuffer.remove(m_logBuffer.size() - 1);
                     }
                 }
-                // 4xx errors — drop logs (invalid data, won't succeed on retry)
-                return;
             }
         }
     }
