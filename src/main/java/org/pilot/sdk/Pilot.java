@@ -77,7 +77,6 @@ public final class Pilot {
 
     private final List<PilotLogEntry> m_logBuffer = Collections.synchronizedList(new ArrayList<>());
     private final Map<String, PilotLogAttributeProvider> m_logAttributeProviders = new ConcurrentHashMap<>();
-    private final Map<String, PilotValueProvider> m_sessionAttributeProviders = new ConcurrentHashMap<>();
     private final Map<String, String> m_sessionAttributeCache = new ConcurrentHashMap<>();
 
     private final CopyOnWriteArrayList<PilotActionListener> m_actionListeners = new CopyOnWriteArrayList<>();
@@ -288,29 +287,6 @@ public final class Pilot {
         Pilot p = s_instance;
         if (p != null) {
             p.m_logAttributeProviders.remove(key);
-        }
-    }
-
-    /**
-     * Register a dynamic session attribute provider.
-     * The provider is called on each heartbeat cycle; if the resolved value
-     * differs from the cached one, updated attributes are sent to the server.
-     */
-    public static void addSessionAttributeProvider(@NonNull String key, @NonNull PilotValueProvider provider) {
-        Pilot p = s_instance;
-        if (p != null) {
-            p.m_sessionAttributeProviders.put(key, provider);
-        }
-    }
-
-    /**
-     * Remove a dynamic session attribute provider.
-     */
-    public static void removeSessionAttributeProvider(@NonNull String key) {
-        Pilot p = s_instance;
-        if (p != null) {
-            p.m_sessionAttributeProviders.remove(key);
-            p.m_sessionAttributeCache.remove(key);
         }
     }
 
@@ -555,11 +531,10 @@ public final class Pilot {
     private void doHeartbeat(@NonNull String sessionToken) {
         if (!m_running.get()) return;
 
-        // Check dynamic session attributes for changes
-        checkSessionAttributeUpdates(sessionToken);
+        Map<String, String> changedAttrs = resolveChangedSessionAttributes();
 
         try {
-            m_httpClient.heartbeat(sessionToken);
+            m_httpClient.heartbeat(sessionToken, changedAttrs);
         } catch (PilotException e) {
             PilotLog.e("Heartbeat failed", e);
             if (e.isSessionGone()) {
@@ -721,9 +696,10 @@ public final class Pilot {
     }
 
     private Map<String, String> resolveAllSessionAttributes() {
-        Map<String, String> merged = new ConcurrentHashMap<>(m_config.sessionAttributes);
+        PilotSessionAttributeBuilder builder = m_config.sessionAttributes;
+        Map<String, String> merged = new ConcurrentHashMap<>(builder.getStaticAttributes());
 
-        for (Map.Entry<String, PilotValueProvider> entry : m_sessionAttributeProviders.entrySet()) {
+        for (Map.Entry<String, PilotValueProvider> entry : builder.getDynamicAttributes().entrySet()) {
             try {
                 Object value = entry.getValue().getValue();
                 String str = String.valueOf(value);
@@ -737,12 +713,14 @@ public final class Pilot {
         return merged;
     }
 
-    private void checkSessionAttributeUpdates(@NonNull String sessionToken) {
-        if (m_sessionAttributeProviders.isEmpty()) return;
+    @Nullable
+    private Map<String, String> resolveChangedSessionAttributes() {
+        Map<String, PilotValueProvider> dynamicAttrs = m_config.sessionAttributes.getDynamicAttributes();
+        if (dynamicAttrs.isEmpty()) return null;
 
         Map<String, String> changed = null;
 
-        for (Map.Entry<String, PilotValueProvider> entry : m_sessionAttributeProviders.entrySet()) {
+        for (Map.Entry<String, PilotValueProvider> entry : dynamicAttrs.entrySet()) {
             try {
                 Object value = entry.getValue().getValue();
                 String str = String.valueOf(value);
@@ -760,14 +738,7 @@ public final class Pilot {
             }
         }
 
-        if (changed != null) {
-            try {
-                m_httpClient.updateSessionAttributes(sessionToken, changed);
-                PilotLog.d("Session attributes updated: %s", changed.keySet());
-            } catch (PilotException e) {
-                PilotLog.e("Failed to update session attributes", e);
-            }
-        }
+        return changed;
     }
 
     private void handleSessionGone() {

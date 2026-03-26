@@ -79,9 +79,23 @@ final class PilotHttpClient {
         return PilotConnectResponse.fromJson(execute(request));
     }
 
-    boolean heartbeat(@NonNull String sessionToken) throws PilotException {
+    boolean heartbeat(@NonNull String sessionToken,
+                      @Nullable Map<String, String> changedAttributes) throws PilotException {
+        JSONObject body = new JSONObject();
+        try {
+            if (changedAttributes != null && !changedAttributes.isEmpty()) {
+                JSONObject attrs = new JSONObject();
+                for (Map.Entry<String, String> entry : changedAttributes.entrySet()) {
+                    attrs.put(entry.getKey(), entry.getValue());
+                }
+                body.put("session_attributes", attrs);
+            }
+        } catch (JSONException e) {
+            throw new PilotException("Failed to build heartbeat request", e);
+        }
+
         Request request = sessionTokenRequest("/api/client/session/heartbeat", sessionToken)
-                .post(EMPTY_BODY)
+                .post(body.length() > 0 ? jsonBody(body) : EMPTY_BODY)
                 .build();
 
         return execute(request).optBoolean("ok", false);
@@ -134,25 +148,6 @@ final class PilotHttpClient {
         execute(request);
     }
 
-    void updateSessionAttributes(@NonNull String sessionToken,
-                                 @NonNull Map<String, String> attributes) throws PilotException {
-        JSONObject body = new JSONObject();
-        try {
-            JSONObject attrs = new JSONObject();
-            for (Map.Entry<String, String> entry : attributes.entrySet()) {
-                attrs.put(entry.getKey(), entry.getValue());
-            }
-            body.put("session_attributes", attrs);
-        } catch (JSONException e) {
-            throw new PilotException("Failed to build attributes request", e);
-        }
-
-        Request request = sessionTokenRequest("/api/client/session/attributes", sessionToken)
-                .patch(jsonBody(body))
-                .build();
-
-        execute(request);
-    }
 
     void sendLogs(@NonNull String sessionToken, @NonNull List<PilotLogEntry> logs,
                   @Nullable JSONObject attributes) throws PilotException {
