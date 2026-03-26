@@ -337,6 +337,46 @@ public final class Pilot {
     }
 
     private void connectAndWaitApproval() {
+        int retryCount = 0;
+        long retryDelayMs = 2000;
+        final long maxRetryDelayMs = 30000;
+
+        while (m_running.get()) {
+            try {
+                doConnectAndWaitApproval();
+                return; // success
+            } catch (PilotException e) {
+                if (e.isUnauthorized()) {
+                    PilotLog.e("Authentication failed", e);
+                    setStatus(PilotSessionStatus.ERROR);
+                    m_running.set(false);
+                    notifyAuthFailed();
+                    notifyError(e);
+                    return;
+                }
+
+                retryCount++;
+                PilotLog.w("Connection attempt %d failed: %s, retrying in %dms", retryCount, e.getMessage(), retryDelayMs);
+                setStatus(PilotSessionStatus.CONNECTING);
+
+                try {
+                    Thread.sleep(retryDelayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    m_running.set(false);
+                    return;
+                }
+
+                retryDelayMs = Math.min(retryDelayMs * 2, maxRetryDelayMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                m_running.set(false);
+                return;
+            }
+        }
+    }
+
+    private void doConnectAndWaitApproval() throws PilotException, InterruptedException {
         setStatus(PilotSessionStatus.CONNECTING);
         notifyConnecting();
 
@@ -350,52 +390,39 @@ public final class Pilot {
             deviceName = Build.MODEL + " (Android " + Build.VERSION.RELEASE + ")";
         }
 
-        try {
-            PilotConnectResponse resp = m_httpClient.connect(deviceId, deviceName);
-            m_requestId.set(resp.getRequestId());
+        PilotConnectResponse resp = m_httpClient.connect(deviceId, deviceName);
+        m_requestId.set(resp.getRequestId());
 
-            PilotLog.i("Connect request sent, request_id=%s, status=%s", resp.getRequestId(), resp.getStatus());
+        PilotLog.i("Connect request sent, request_id=%s, status=%s", resp.getRequestId(), resp.getStatus());
 
-            if (resp.isApproved() && resp.getSessionToken() != null) {
-                onApproved(resp.getSessionToken());
+        if (resp.isApproved() && resp.getSessionToken() != null) {
+            onApproved(resp.getSessionToken());
+            return;
+        }
+
+        if (resp.isRejected()) {
+            onRejected();
+            return;
+        }
+
+        setStatus(PilotSessionStatus.WAITING_APPROVAL);
+        notifyWaitingApproval(resp.getRequestId());
+
+        // Poll loop
+        while (m_running.get()) {
+            Thread.sleep(m_config.pollIntervalMs);
+
+            PilotConnectResponse pollResp = m_httpClient.pollStatus(resp.getRequestId());
+
+            if (pollResp.isApproved() && pollResp.getSessionToken() != null) {
+                onApproved(pollResp.getSessionToken());
                 return;
             }
 
-            if (resp.isRejected()) {
+            if (pollResp.isRejected()) {
                 onRejected();
                 return;
             }
-
-            setStatus(PilotSessionStatus.WAITING_APPROVAL);
-            notifyWaitingApproval(resp.getRequestId());
-
-            // Poll loop
-            while (m_running.get()) {
-                Thread.sleep(m_config.pollIntervalMs);
-
-                PilotConnectResponse pollResp = m_httpClient.pollStatus(resp.getRequestId());
-
-                if (pollResp.isApproved() && pollResp.getSessionToken() != null) {
-                    onApproved(pollResp.getSessionToken());
-                    return;
-                }
-
-                if (pollResp.isRejected()) {
-                    onRejected();
-                    return;
-                }
-            }
-        } catch (PilotException e) {
-            PilotLog.e("Connection failed", e);
-            setStatus(PilotSessionStatus.ERROR);
-            m_running.set(false);
-            if (e.isUnauthorized()) {
-                notifyAuthFailed();
-            }
-            notifyError(e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            m_running.set(false);
         }
     }
 
