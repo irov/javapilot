@@ -48,14 +48,14 @@ final class PilotHttpClient {
     // ── Client endpoints ──
 
     PilotConnectResponse connect(@NonNull String deviceId, @NonNull String deviceName,
-                                @NonNull Map<String, String> sessionAttributes) throws PilotException {
+                                @NonNull Map<String, Object> sessionAttributes) throws PilotException {
         JSONObject body = new JSONObject();
         try {
             body.put("device_id", deviceId);
             body.put("device_name", deviceName);
             if (!sessionAttributes.isEmpty()) {
                 JSONObject attrs = new JSONObject();
-                for (Map.Entry<String, String> entry : sessionAttributes.entrySet()) {
+                for (Map.Entry<String, Object> entry : sessionAttributes.entrySet()) {
                     attrs.put(entry.getKey(), entry.getValue());
                 }
                 body.put("session_attributes", attrs);
@@ -80,12 +80,12 @@ final class PilotHttpClient {
     }
 
     boolean heartbeat(@NonNull String sessionToken,
-                      @Nullable Map<String, String> changedAttributes) throws PilotException {
+                      @Nullable Map<String, Object> changedAttributes) throws PilotException {
         JSONObject body = new JSONObject();
         try {
             if (changedAttributes != null && !changedAttributes.isEmpty()) {
                 JSONObject attrs = new JSONObject();
-                for (Map.Entry<String, String> entry : changedAttributes.entrySet()) {
+                for (Map.Entry<String, Object> entry : changedAttributes.entrySet()) {
                     attrs.put(entry.getKey(), entry.getValue());
                 }
                 body.put("session_attributes", attrs);

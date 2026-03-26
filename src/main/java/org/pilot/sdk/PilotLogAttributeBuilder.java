@@ -16,12 +16,12 @@ import java.util.Map;
  * }</pre>
  */
 public final class PilotLogAttributeBuilder {
-    private final Map<String, String> m_staticAttributes = new LinkedHashMap<>();
+    private final Map<String, Object> m_staticAttributes = new LinkedHashMap<>();
     private final Map<String, PilotValueProvider> m_dynamicAttributes = new LinkedHashMap<>();
 
     @NonNull
     public PilotLogAttributeBuilder put(@NonNull String key, @NonNull Object value) {
-        m_staticAttributes.put(key, String.valueOf(value));
+        m_staticAttributes.put(key, value);
         return this;
     }
 
@@ -32,7 +32,7 @@ public final class PilotLogAttributeBuilder {
     }
 
     @NonNull
-    Map<String, String> getStaticAttributes() {
+    Map<String, Object> getStaticAttributes() {
         return m_staticAttributes;
     }
 

@@ -1,19 +1,13 @@
 package org.pilot.sdk;
 
-import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 /**
- * Provides a dynamic value for a widget property.
+ * Provides a dynamic value for a widget property or attribute.
  * Called on the SDK poll thread — keep implementations lightweight.
- *
- * <pre>{@code
- * root.addStat("FPS")
- *     .unit("fps")
- *     .valueProvider(() -> game.getFps());
- * }</pre>
  */
 @FunctionalInterface
 public interface PilotValueProvider {
-    @NonNull
+    @Nullable
     Object getValue();
 }

@@ -65,7 +65,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.13";
+    public static final String VERSION = "1.0.14";
 
     private static volatile Pilot s_instance;
 
@@ -79,7 +79,7 @@ public final class Pilot {
 
     private final List<PilotLogEntry> m_logBuffer = Collections.synchronizedList(new ArrayList<>());
     private final AtomicBoolean m_logOverflowWarned = new AtomicBoolean(false);
-    private final Map<String, String> m_sessionAttributeCache = new ConcurrentHashMap<>();
+    private final Map<String, Object> m_sessionAttributeCache = new ConcurrentHashMap<>();
 
     private final CopyOnWriteArrayList<PilotActionListener> m_actionListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<PilotSessionListener> m_sessionListeners = new CopyOnWriteArrayList<>();
@@ -512,7 +512,7 @@ public final class Pilot {
     private void doHeartbeat(@NonNull String sessionToken) {
         if (!m_running.get()) return;
 
-        Map<String, String> changedAttrs = resolveChangedSessionAttributes();
+        Map<String, Object> changedAttrs = resolveChangedSessionAttributes();
 
         try {
             m_httpClient.heartbeat(sessionToken, changedAttrs);
@@ -685,7 +685,7 @@ public final class Pilot {
     @Nullable
     private JSONObject resolveLogAttributes() {
         PilotLogAttributeBuilder builder = m_config.logAttributes;
-        Map<String, String> staticAttrs = builder.getStaticAttributes();
+        Map<String, Object> staticAttrs = builder.getStaticAttributes();
         Map<String, PilotValueProvider> dynamicAttrs = builder.getDynamicAttributes();
 
         if (staticAttrs.isEmpty() && dynamicAttrs.isEmpty()) {
@@ -694,7 +694,7 @@ public final class Pilot {
 
         JSONObject attributes = new JSONObject();
         try {
-            for (Map.Entry<String, String> entry : staticAttrs.entrySet()) {
+            for (Map.Entry<String, Object> entry : staticAttrs.entrySet()) {
                 attributes.put(entry.getKey(), entry.getValue());
             }
         } catch (Exception ignored) {
@@ -703,9 +703,7 @@ public final class Pilot {
         for (Map.Entry<String, PilotValueProvider> entry : dynamicAttrs.entrySet()) {
             try {
                 Object value = entry.getValue().getValue();
-                if (value != null) {
-                    attributes.put(entry.getKey(), String.valueOf(value));
-                }
+                attributes.put(entry.getKey(), value != null ? value : JSONObject.NULL);
             } catch (Exception ignored) {
             }
         }
@@ -717,16 +715,15 @@ public final class Pilot {
         return attributes;
     }
 
-    private Map<String, String> resolveAllSessionAttributes() {
+    private Map<String, Object> resolveAllSessionAttributes() {
         PilotSessionAttributeBuilder builder = m_config.sessionAttributes;
-        Map<String, String> merged = new ConcurrentHashMap<>(builder.getStaticAttributes());
+        Map<String, Object> merged = new ConcurrentHashMap<>(builder.getStaticAttributes());
 
         for (Map.Entry<String, PilotValueProvider> entry : builder.getDynamicAttributes().entrySet()) {
             try {
                 Object value = entry.getValue().getValue();
-                String str = String.valueOf(value);
-                merged.put(entry.getKey(), str);
-                m_sessionAttributeCache.put(entry.getKey(), str);
+                merged.put(entry.getKey(), value != null ? value : JSONObject.NULL);
+                m_sessionAttributeCache.put(entry.getKey(), value != null ? value : JSONObject.NULL);
             } catch (Exception e) {
                 PilotLog.e("Session attribute provider failed: " + entry.getKey(), e);
             }
@@ -736,24 +733,24 @@ public final class Pilot {
     }
 
     @Nullable
-    private Map<String, String> resolveChangedSessionAttributes() {
+    private Map<String, Object> resolveChangedSessionAttributes() {
         Map<String, PilotValueProvider> dynamicAttrs = m_config.sessionAttributes.getDynamicAttributes();
         if (dynamicAttrs.isEmpty()) return null;
 
-        Map<String, String> changed = null;
+        Map<String, Object> changed = null;
 
         for (Map.Entry<String, PilotValueProvider> entry : dynamicAttrs.entrySet()) {
             try {
                 Object value = entry.getValue().getValue();
-                String str = String.valueOf(value);
-                String cached = m_sessionAttributeCache.get(entry.getKey());
+                Object resolved = value != null ? value : JSONObject.NULL;
+                Object cached = m_sessionAttributeCache.get(entry.getKey());
 
-                if (!str.equals(cached)) {
-                    m_sessionAttributeCache.put(entry.getKey(), str);
+                if (!resolved.equals(cached)) {
+                    m_sessionAttributeCache.put(entry.getKey(), resolved);
                     if (changed == null) {
                         changed = new ConcurrentHashMap<>();
                     }
-                    changed.put(entry.getKey(), str);
+                    changed.put(entry.getKey(), resolved);
                 }
             } catch (Exception e) {
                 PilotLog.e("Session attribute provider failed: " + entry.getKey(), e);
