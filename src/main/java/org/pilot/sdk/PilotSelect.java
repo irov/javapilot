@@ -10,9 +10,9 @@ import org.json.JSONObject;
 /**
  * Select (dropdown) widget. Triggers a "change" action with payload {@code {"value": "..."}}.
  */
-public final class PilotSelect extends PilotWidget {
-    PilotSelect(@NonNull PilotUI ui, @NonNull String id, @NonNull String label) {
-        super(ui, "select", id);
+public final class PilotSelect extends PilotWidget<PilotSelect> {
+    PilotSelect(@NonNull PilotUI ui, @NonNull String label) {
+        super(ui, "select");
         put("label", label);
     }
 
@@ -43,7 +43,7 @@ public final class PilotSelect extends PilotWidget {
 
     @NonNull
     public PilotSelect onChange(@Nullable PilotWidgetCallback callback) {
-        m_ui.registerCallback(m_id, callback);
+        m_ui.registerCallback(m_internalId, callback);
         return this;
     }
 }

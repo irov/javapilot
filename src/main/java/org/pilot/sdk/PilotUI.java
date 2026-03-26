@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Central UI data source for the Pilot SDK.
@@ -25,27 +26,34 @@ import java.util.concurrent.ConcurrentHashMap;
  * PilotTab tab = ui.addTab("game", "Game Controls");
  * PilotLayout root = tab.vertical();
  *
- * root.addButton("btn-restart", "Restart")
+ * root.addButton("Restart")
  *     .variant("contained").color("error")
  *     .onClick(action -> restartGame());
  *
- * root.addStat("stat-fps", "FPS").value("60").unit("fps");
+ * root.addStat("FPS").value("60").unit("fps");
  *
  * PilotLayout row = root.addHorizontal();
- * row.addButton("btn-a", "Action A").onClick(action -> doA());
+ * row.addButton("Action A").onClick(action -> doA());
  * row.addPadding(1.0);
- * row.addButton("btn-b", "Action B").onClick(action -> doB());
+ * row.addButton("Action B").onClick(action -> doB());
  * }</pre>
  */
 public final class PilotUI {
     private final List<PilotTab> m_tabs = new ArrayList<>();
-    private final Map<String, PilotWidgetCallback> m_callbacks = new ConcurrentHashMap<>();
-    private final Set<PilotWidget> m_providers = ConcurrentHashMap.newKeySet();
+    private final Map<Integer, PilotWidgetCallback> m_callbacks = new ConcurrentHashMap<>();
+    private final Set<PilotWidget<?>> m_providers = ConcurrentHashMap.newKeySet();
+    private final AtomicInteger m_idCounter = new AtomicInteger(0);
     private int m_version = 2;
     private int m_revision = 1;
     private volatile boolean m_dirty = false;
 
     PilotUI() {
+    }
+
+    // ── ID generation ──
+
+    int nextId() {
+        return m_idCounter.incrementAndGet();
     }
 
     // ── Tab management ──
@@ -89,7 +97,7 @@ public final class PilotUI {
 
     // ── Widget callbacks ──
 
-    void registerCallback(@NonNull String widgetId, @Nullable PilotWidgetCallback callback) {
+    void registerCallback(int widgetId, @Nullable PilotWidgetCallback callback) {
         if (callback != null) {
             m_callbacks.put(widgetId, callback);
         } else {
@@ -113,11 +121,11 @@ public final class PilotUI {
 
     // ── Value providers ──
 
-    void registerProvider(@NonNull PilotWidget widget) {
+    void registerProvider(@NonNull PilotWidget<?> widget) {
         m_providers.add(widget);
     }
 
-    void unregisterProvider(@NonNull PilotWidget widget) {
+    void unregisterProvider(@NonNull PilotWidget<?> widget) {
         m_providers.remove(widget);
     }
 
@@ -126,7 +134,7 @@ public final class PilotUI {
      * Called on the SDK poll thread.
      */
     void pollValues() {
-        for (PilotWidget w : m_providers) {
+        for (PilotWidget<?> w : m_providers) {
             if (w.pollProvider()) {
                 m_dirty = true;
             }

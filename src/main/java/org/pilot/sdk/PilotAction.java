@@ -11,13 +11,14 @@ import org.json.JSONObject;
 public final class PilotAction {
     private final String m_id;
     private final String m_sessionId;
-    private final String m_widgetId;
-    private final String m_actionType;
-    private final String m_status;
+    private final int m_widgetId;
+    private final PilotActionType m_actionType;
+    private final PilotActionStatus m_status;
     private final JSONObject m_payload;
 
-    PilotAction(@NonNull String id, @NonNull String sessionId, @NonNull String widgetId,
-                @NonNull String actionType, @NonNull String status, @Nullable JSONObject payload) {
+    PilotAction(@NonNull String id, @NonNull String sessionId, int widgetId,
+                @NonNull PilotActionType actionType, @NonNull PilotActionStatus status,
+                @Nullable JSONObject payload) {
         m_id = id;
         m_sessionId = sessionId;
         m_widgetId = widgetId;
@@ -38,21 +39,20 @@ public final class PilotAction {
         return m_sessionId;
     }
 
-    /** Widget that triggered the action, e.g. "btn-restart", "switch-debug". */
-    @NonNull
-    public String getWidgetId() {
+    /** Widget that triggered the action. */
+    public int getWidgetId() {
         return m_widgetId;
     }
 
-    /** Type of action: "click", "change", etc. */
+    /** Type of action: CLICK, CHANGE, TOGGLE, etc. */
     @NonNull
-    public String getActionType() {
+    public PilotActionType getActionType() {
         return m_actionType;
     }
 
-    /** Status: "pending", "delivered", "acknowledged". */
+    /** Status: PENDING, DELIVERED, ACKNOWLEDGED. */
     @NonNull
-    public String getStatus() {
+    public PilotActionStatus getStatus() {
         return m_status;
     }
 
@@ -66,9 +66,9 @@ public final class PilotAction {
         return new PilotAction(
                 json.optString("id", ""),
                 json.optString("session_id", ""),
-                json.optString("widget_id", ""),
-                json.optString("action_type", ""),
-                json.optString("status", ""),
+                json.optInt("widget_id", 0),
+                PilotActionType.fromValue(json.optString("action_type", "")),
+                PilotActionStatus.fromValue(json.optString("status", "")),
                 json.optJSONObject("payload")
         );
     }

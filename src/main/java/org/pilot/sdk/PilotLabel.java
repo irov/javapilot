@@ -8,14 +8,14 @@ import androidx.annotation.Nullable;
  *
  * <p>Use {@link #textProvider} for automatic updates:</p>
  * <pre>{@code
- * root.addLabel("label-status", "Idle")
+ * root.addLabel("Idle")
  *     .color("info")
  *     .textProvider(() -> game.getStatus());
  * }</pre>
  */
-public final class PilotLabel extends PilotWidget {
-    PilotLabel(@NonNull PilotUI ui, @NonNull String id, @NonNull String text) {
-        super(ui, "label", id);
+public final class PilotLabel extends PilotWidget<PilotLabel> {
+    PilotLabel(@NonNull PilotUI ui, @NonNull String text) {
+        super(ui, "label");
         put("text", text);
     }
 

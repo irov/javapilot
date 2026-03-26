@@ -11,9 +11,9 @@ import java.util.List;
 /**
  * Table widget. Displays data in rows and columns.
  */
-public final class PilotTable extends PilotWidget {
-    PilotTable(@NonNull PilotUI ui, @NonNull String id, @NonNull String label) {
-        super(ui, "table", id);
+public final class PilotTable extends PilotWidget<PilotTable> {
+    PilotTable(@NonNull PilotUI ui, @NonNull String label) {
+        super(ui, "table");
         put("label", label);
     }
 

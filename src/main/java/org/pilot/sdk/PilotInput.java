@@ -6,9 +6,9 @@ import androidx.annotation.Nullable;
 /**
  * Text input widget. Triggers a "change" action with payload {@code {"value": "..."}}.
  */
-public final class PilotInput extends PilotWidget {
-    PilotInput(@NonNull PilotUI ui, @NonNull String id, @NonNull String label) {
-        super(ui, "input", id);
+public final class PilotInput extends PilotWidget<PilotInput> {
+    PilotInput(@NonNull PilotUI ui, @NonNull String label) {
+        super(ui, "input");
         put("label", label);
     }
 
@@ -32,7 +32,7 @@ public final class PilotInput extends PilotWidget {
 
     @NonNull
     public PilotInput onSubmit(@Nullable PilotWidgetCallback callback) {
-        m_ui.registerCallback(m_id, callback);
+        m_ui.registerCallback(m_internalId, callback);
         return this;
     }
 }

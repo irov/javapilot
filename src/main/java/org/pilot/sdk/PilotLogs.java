@@ -5,9 +5,9 @@ import androidx.annotation.NonNull;
 /**
  * Logs display widget. Shows recent log output.
  */
-public final class PilotLogs extends PilotWidget {
-    PilotLogs(@NonNull PilotUI ui, @NonNull String id, @NonNull String label) {
-        super(ui, "logs", id);
+public final class PilotLogs extends PilotWidget<PilotLogs> {
+    PilotLogs(@NonNull PilotUI ui, @NonNull String label) {
+        super(ui, "logs");
         put("label", label);
     }
 

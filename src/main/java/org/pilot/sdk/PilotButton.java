@@ -7,14 +7,14 @@ import androidx.annotation.Nullable;
  * Button widget. Triggers a "click" action when pressed on the dashboard.
  *
  * <pre>{@code
- * layout.addButton("btn-restart", "Restart")
+ * layout.addButton("Restart")
  *     .variant("contained").color("error")
  *     .onClick(action -> restartGame());
  * }</pre>
  */
-public final class PilotButton extends PilotWidget {
-    PilotButton(@NonNull PilotUI ui, @NonNull String id, @NonNull String label) {
-        super(ui, "button", id);
+public final class PilotButton extends PilotWidget<PilotButton> {
+    PilotButton(@NonNull PilotUI ui, @NonNull String label) {
+        super(ui, "button");
         put("label", label);
     }
 
@@ -38,7 +38,7 @@ public final class PilotButton extends PilotWidget {
 
     @NonNull
     public PilotButton onClick(@Nullable PilotWidgetCallback callback) {
-        m_ui.registerCallback(m_id, callback);
+        m_ui.registerCallback(m_internalId, callback);
         return this;
     }
 }

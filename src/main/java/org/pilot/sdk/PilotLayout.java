@@ -16,13 +16,13 @@ import java.util.List;
  * <pre>{@code
  * PilotLayout root = tab.vertical();
  *
- * root.addButton("btn-1", "Click Me").onClick(action -> { ... });
- * root.addStat("stat-fps", "FPS").value("60").unit("fps");
+ * root.addButton("Click Me").onClick(action -> { ... });
+ * root.addStat("FPS").value("60").unit("fps");
  *
  * PilotLayout row = root.addHorizontal();
- * row.addButton("btn-a", "A").onClick(action -> doA());
+ * row.addButton("A").onClick(action -> doA());
  * row.addPadding(1.0);
- * row.addButton("btn-b", "B").onClick(action -> doB());
+ * row.addButton("B").onClick(action -> doB());
  * }</pre>
  */
 public final class PilotLayout {
@@ -83,64 +83,64 @@ public final class PilotLayout {
     // ── Widgets ──
 
     @NonNull
-    public PilotButton addButton(@NonNull String id, @NonNull String label) {
-        PilotButton w = new PilotButton(m_ui, id, label);
+    public PilotButton addButton(@NonNull String label) {
+        PilotButton w = new PilotButton(m_ui, label);
         m_children.add(w);
         return w;
     }
 
     @NonNull
-    public PilotLabel addLabel(@NonNull String id, @NonNull String text) {
-        PilotLabel w = new PilotLabel(m_ui, id, text);
+    public PilotLabel addLabel(@NonNull String text) {
+        PilotLabel w = new PilotLabel(m_ui, text);
         m_children.add(w);
         return w;
     }
 
     @NonNull
-    public PilotStat addStat(@NonNull String id, @NonNull String label) {
-        PilotStat w = new PilotStat(m_ui, id, label);
+    public PilotStat addStat(@NonNull String label) {
+        PilotStat w = new PilotStat(m_ui, label);
         m_children.add(w);
         return w;
     }
 
     @NonNull
-    public PilotSwitch addSwitch(@NonNull String id, @NonNull String label) {
-        PilotSwitch w = new PilotSwitch(m_ui, id, label);
+    public PilotSwitch addSwitch(@NonNull String label) {
+        PilotSwitch w = new PilotSwitch(m_ui, label);
         m_children.add(w);
         return w;
     }
 
     @NonNull
-    public PilotInput addInput(@NonNull String id, @NonNull String label) {
-        PilotInput w = new PilotInput(m_ui, id, label);
+    public PilotInput addInput(@NonNull String label) {
+        PilotInput w = new PilotInput(m_ui, label);
         m_children.add(w);
         return w;
     }
 
     @NonNull
-    public PilotSelect addSelect(@NonNull String id, @NonNull String label) {
-        PilotSelect w = new PilotSelect(m_ui, id, label);
+    public PilotSelect addSelect(@NonNull String label) {
+        PilotSelect w = new PilotSelect(m_ui, label);
         m_children.add(w);
         return w;
     }
 
     @NonNull
-    public PilotTextarea addTextarea(@NonNull String id, @NonNull String label) {
-        PilotTextarea w = new PilotTextarea(m_ui, id, label);
+    public PilotTextarea addTextarea(@NonNull String label) {
+        PilotTextarea w = new PilotTextarea(m_ui, label);
         m_children.add(w);
         return w;
     }
 
     @NonNull
-    public PilotTable addTable(@NonNull String id, @NonNull String label) {
-        PilotTable w = new PilotTable(m_ui, id, label);
+    public PilotTable addTable(@NonNull String label) {
+        PilotTable w = new PilotTable(m_ui, label);
         m_children.add(w);
         return w;
     }
 
     @NonNull
-    public PilotLogs addLogs(@NonNull String id, @NonNull String label) {
-        PilotLogs w = new PilotLogs(m_ui, id, label);
+    public PilotLogs addLogs(@NonNull String label) {
+        PilotLogs w = new PilotLogs(m_ui, label);
         m_children.add(w);
         return w;
     }
@@ -159,7 +159,7 @@ public final class PilotLayout {
                 if (child instanceof PilotLayout) {
                     childrenArr.put(((PilotLayout) child).toJson());
                 } else if (child instanceof PilotWidget) {
-                    childrenArr.put(((PilotWidget) child).toJson());
+                    childrenArr.put(((PilotWidget<?>) child).toJson());
                 } else if (child instanceof PaddingElement) {
                     childrenArr.put(((PaddingElement) child).toJson());
                 }

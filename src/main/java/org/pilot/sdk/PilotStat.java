@@ -8,14 +8,14 @@ import androidx.annotation.Nullable;
  *
  * <p>Use {@link #valueProvider} for automatic updates:</p>
  * <pre>{@code
- * root.addStat("stat-fps", "FPS")
+ * root.addStat("FPS")
  *     .unit("fps")
  *     .valueProvider(() -> String.valueOf(game.getFps()));
  * }</pre>
  */
-public final class PilotStat extends PilotWidget {
-    PilotStat(@NonNull PilotUI ui, @NonNull String id, @NonNull String label) {
-        super(ui, "stat", id);
+public final class PilotStat extends PilotWidget<PilotStat> {
+    PilotStat(@NonNull PilotUI ui, @NonNull String label) {
+        super(ui, "stat");
         put("label", label);
     }
 

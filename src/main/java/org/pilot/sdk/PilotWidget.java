@@ -12,9 +12,10 @@ import java.util.Objects;
  * Base class for all Pilot UI widgets.
  * Stores properties as a JSONObject for direct serialization.
  */
-public class PilotWidget {
+public class PilotWidget<T extends PilotWidget<T>> {
     protected final PilotUI m_ui;
-    protected final String m_id;
+    protected final int m_internalId;
+    protected String m_publicId;
     protected final String m_type;
     protected final JSONObject m_json;
 
@@ -22,21 +23,29 @@ public class PilotWidget {
     private PilotValueProvider m_provider;
     private String m_cachedValue;
 
-    PilotWidget(@NonNull PilotUI ui, @NonNull String type, @NonNull String id) {
+    PilotWidget(@NonNull PilotUI ui, @NonNull String type) {
         m_ui = ui;
-        m_id = id;
+        m_internalId = ui.nextId();
         m_type = type;
         m_json = new JSONObject();
         try {
             m_json.put("type", type);
-            m_json.put("id", id);
+            m_json.put("id", m_internalId);
         } catch (JSONException ignored) {
         }
     }
 
     @NonNull
     public String getId() {
-        return m_id;
+        if (m_publicId != null) {
+            return m_publicId;
+        }
+
+        return String.valueOf(m_internalId);
+    }
+
+    public int getInternalId() {
+        return m_internalId;
     }
 
     @NonNull
@@ -50,6 +59,17 @@ public class PilotWidget {
             m_ui.markDirty();
         } catch (JSONException ignored) {
         }
+    }
+
+    /**
+     * Set a public ID for finding/accessing the widget programmatically.
+     * Does not affect internal communication with the dashboard.
+     */
+    @NonNull
+    @SuppressWarnings("unchecked")
+    public T setId(@NonNull String id) {
+        m_publicId = id;
+        return (T) this;
     }
 
     /**
@@ -84,7 +104,7 @@ public class PilotWidget {
                 return true;
             }
         } catch (Exception e) {
-            PilotLog.e("Value provider failed for widget " + m_id, e);
+            PilotLog.e("Value provider failed for widget " + m_internalId, e);
         }
         return false;
     }

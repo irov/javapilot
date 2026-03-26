@@ -6,9 +6,9 @@ import androidx.annotation.Nullable;
 /**
  * Multi-line text input widget.
  */
-public final class PilotTextarea extends PilotWidget {
-    PilotTextarea(@NonNull PilotUI ui, @NonNull String id, @NonNull String label) {
-        super(ui, "textarea", id);
+public final class PilotTextarea extends PilotWidget<PilotTextarea> {
+    PilotTextarea(@NonNull PilotUI ui, @NonNull String label) {
+        super(ui, "textarea");
         put("label", label);
     }
 
@@ -26,7 +26,7 @@ public final class PilotTextarea extends PilotWidget {
 
     @NonNull
     public PilotTextarea onSubmit(@Nullable PilotWidgetCallback callback) {
-        m_ui.registerCallback(m_id, callback);
+        m_ui.registerCallback(m_internalId, callback);
         return this;
     }
 }
