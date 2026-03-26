@@ -31,7 +31,7 @@ public class PilotWidget<T extends PilotWidget<T>> {
         m_json = new JSONObject();
         try {
             m_json.put("type", type);
-            m_json.put("id", String.valueOf(m_internalId));
+            m_json.put("id", m_internalId);
         } catch (JSONException ignored) {
         }
     }
