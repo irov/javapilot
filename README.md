@@ -43,12 +43,12 @@ dependencies {
 PilotSessionAttributeBuilder sessionAttrs = new PilotSessionAttributeBuilder()
     .put("is_debug", BuildConfig.DEBUG)          // boolean
     .put("install_version", 42)                  // int
+    .put("build_type", "debug")                  // string
     .put("referrer", null)                       // null
     .putProvider("user_id", () -> getUserId());   // dynamic provider
 
 // Log attributes — attached to every log entry
 PilotLogAttributeBuilder logAttrs = new PilotLogAttributeBuilder()
-    .put("build_type", "debug")
     .putProvider("user_score", () -> game.getScore())  // float, changes dynamically
     .putProvider("screen_name", () -> getCurrentScreen());
 
@@ -74,15 +74,12 @@ PilotLayout root = tab.vertical();
 // Buttons with callbacks
 root.addButton("btn-restart", "Restart")
     .variant("contained").color("error")
-    .onClick(action -> {
-        restartGame();
-        Pilot.acknowledgeAction(action.getId(), null);
-    });
+    .onClick(action -> restartGame());
 
 // Stats with value providers — auto-updated, dirty-checked
 root.addStat("stat-fps", "FPS")
     .unit("fps")
-    .valueProvider(() -> String.valueOf(game.getFps()));
+    .valueProvider(() -> game.getFps());
 
 // Horizontal row with padding
 PilotLayout row = root.addHorizontal();
