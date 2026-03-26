@@ -9,6 +9,7 @@ import org.json.JSONObject;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Map;
 import java.util.TimeZone;
 
 /**
@@ -26,23 +27,23 @@ public final class PilotLogEntry {
     private final String m_message;
     private final String m_category;
     private final String m_thread;
-    private final JSONObject m_metadata;
+    private final Map<String, Object> m_metadata;
     private final JSONObject m_attributes;
     private final String m_clientTimestamp;
 
-    public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message, @Nullable JSONObject metadata) {
+    public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message, @Nullable Map<String, Object> metadata) {
         this(level, message, null, null, metadata, null);
     }
 
     public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message,
                          @Nullable String category, @Nullable String thread,
-                         @Nullable JSONObject metadata) {
+                         @Nullable Map<String, Object> metadata) {
         this(level, message, category, thread, metadata, null);
     }
 
     public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message,
                          @Nullable String category, @Nullable String thread,
-                         @Nullable JSONObject metadata, @Nullable JSONObject attributes) {
+                         @Nullable Map<String, Object> metadata, @Nullable JSONObject attributes) {
         m_level = level.getValue();
         m_message = message;
         m_category = category;
@@ -55,19 +56,19 @@ public final class PilotLogEntry {
         }
     }
 
-    public PilotLogEntry(@NonNull String level, @NonNull String message, @Nullable JSONObject metadata) {
+    public PilotLogEntry(@NonNull String level, @NonNull String message, @Nullable Map<String, Object> metadata) {
         this(level, message, null, null, metadata, null);
     }
 
     public PilotLogEntry(@NonNull String level, @NonNull String message,
                          @Nullable String category, @Nullable String thread,
-                         @Nullable JSONObject metadata) {
+                         @Nullable Map<String, Object> metadata) {
         this(level, message, category, thread, metadata, null);
     }
 
     public PilotLogEntry(@NonNull String level, @NonNull String message,
                          @Nullable String category, @Nullable String thread,
-                         @Nullable JSONObject metadata, @Nullable JSONObject attributes) {
+                         @Nullable Map<String, Object> metadata, @Nullable JSONObject attributes) {
         m_level = level;
         m_message = message;
         m_category = category;
@@ -81,23 +82,23 @@ public final class PilotLogEntry {
     }
 
     public static PilotLogEntry debug(@NonNull String message) {
-        return new PilotLogEntry(PilotLogLevel.DEBUG, message, null);
+        return new PilotLogEntry(PilotLogLevel.DEBUG, message, (Map<String, Object>) null);
     }
 
     public static PilotLogEntry info(@NonNull String message) {
-        return new PilotLogEntry(PilotLogLevel.INFO, message, null);
+        return new PilotLogEntry(PilotLogLevel.INFO, message, (Map<String, Object>) null);
     }
 
     public static PilotLogEntry warning(@NonNull String message) {
-        return new PilotLogEntry(PilotLogLevel.WARNING, message, null);
+        return new PilotLogEntry(PilotLogLevel.WARNING, message, (Map<String, Object>) null);
     }
 
     public static PilotLogEntry error(@NonNull String message) {
-        return new PilotLogEntry(PilotLogLevel.ERROR, message, null);
+        return new PilotLogEntry(PilotLogLevel.ERROR, message, (Map<String, Object>) null);
     }
 
     public static PilotLogEntry critical(@NonNull String message) {
-        return new PilotLogEntry(PilotLogLevel.CRITICAL, message, null);
+        return new PilotLogEntry(PilotLogLevel.CRITICAL, message, (Map<String, Object>) null);
     }
 
     @NonNull
@@ -126,8 +127,13 @@ public final class PilotLogEntry {
                 json.put("thread", m_thread);
             }
 
-            if (m_metadata != null) {
-                json.put("metadata", m_metadata);
+            if (m_metadata != null && !m_metadata.isEmpty()) {
+                JSONObject metaJson = new JSONObject();
+                for (Map.Entry<String, Object> entry : m_metadata.entrySet()) {
+                    Object value = entry.getValue();
+                    metaJson.put(entry.getKey(), value != null ? value : JSONObject.NULL);
+                }
+                json.put("metadata", metaJson);
             }
 
             if (m_attributes != null) {

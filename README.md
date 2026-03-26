@@ -32,7 +32,7 @@ dependencyResolutionManagement {
 
 // build.gradle
 dependencies {
-    implementation 'com.github.irov:javapilot:1.0.14'
+    implementation 'com.github.irov:javapilot:1.0.15'
 }
 ```
 
@@ -109,9 +109,11 @@ Pilot.log(PilotLogLevel.INFO, "Game started");
 // Log with category and thread
 Pilot.log(PilotLogLevel.WARNING, "Low memory", "system", "main");
 
-// Log with metadata
-JSONObject meta = new JSONObject();
-meta.put("heap_mb", Runtime.getRuntime().totalMemory() / 1024 / 1024);
+// Log with metadata (native Map instead of JSONObject)
+Map<String, Object> meta = Map.of(
+    "heap_mb", Runtime.getRuntime().totalMemory() / 1024 / 1024,
+    "is_low", true
+);
 Pilot.log(PilotLogLevel.ERROR, "OOM crash", meta);
 
 // Full log call

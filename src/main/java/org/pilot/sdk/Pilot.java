@@ -65,7 +65,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.14";
+    public static final String VERSION = "1.0.15";
 
     private static volatile Pilot s_instance;
 
@@ -242,7 +242,7 @@ public final class Pilot {
     /**
      * Send a log entry with metadata.
      */
-    public static void log(@NonNull PilotLogLevel level, @NonNull String message, @Nullable JSONObject metadata) {
+    public static void log(@NonNull PilotLogLevel level, @NonNull String message, @Nullable Map<String, Object> metadata) {
         Pilot p = s_instance;
         if (p != null) {
             p.bufferLog(new PilotLogEntry(level, message, null, null, metadata, p.resolveLogAttributes()));
@@ -254,7 +254,7 @@ public final class Pilot {
      */
     public static void log(@NonNull PilotLogLevel level, @NonNull String message,
                            @Nullable String category, @Nullable String thread,
-                           @Nullable JSONObject metadata) {
+                           @Nullable Map<String, Object> metadata) {
         Pilot p = s_instance;
         if (p != null) {
             p.bufferLog(new PilotLogEntry(level, message, category, thread, metadata, p.resolveLogAttributes()));
