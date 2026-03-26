@@ -637,6 +637,8 @@ public final class Pilot {
         });
     }
 
+    private static final int MAX_BATCH_SIZE = 100;
+
     private void flushLogs(@NonNull String sessionToken) {
         if (m_logBuffer.isEmpty()) return;
 
@@ -646,13 +648,22 @@ public final class Pilot {
             m_logBuffer.clear();
         }
 
-        try {
-            m_httpClient.sendLogs(sessionToken, batch);
-        } catch (PilotException e) {
-            PilotLog.e("Failed to flush logs", e);
-            // Re-add failed logs to buffer
-            synchronized (m_logBuffer) {
-                m_logBuffer.addAll(0, batch);
+        for (int i = 0; i < batch.size(); i += MAX_BATCH_SIZE) {
+            List<PilotLogEntry> chunk = batch.subList(i, Math.min(i + MAX_BATCH_SIZE, batch.size()));
+            try {
+                m_httpClient.sendLogs(sessionToken, chunk);
+            } catch (PilotException e) {
+                PilotLog.e("Failed to flush logs", e);
+
+                if (e.isNetworkError() || e.getHttpCode() >= 500) {
+                    // Server/network error — re-add remaining unsent logs
+                    List<PilotLogEntry> remaining = batch.subList(i, batch.size());
+                    synchronized (m_logBuffer) {
+                        m_logBuffer.addAll(0, remaining);
+                    }
+                }
+                // 4xx errors — drop logs (invalid data, won't succeed on retry)
+                return;
             }
         }
     }
