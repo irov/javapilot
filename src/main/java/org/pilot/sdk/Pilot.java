@@ -77,6 +77,8 @@ public final class Pilot {
 
     private final List<PilotLogEntry> m_logBuffer = Collections.synchronizedList(new ArrayList<>());
     private final Map<String, PilotLogAttributeProvider> m_logAttributeProviders = new ConcurrentHashMap<>();
+    private final Map<String, PilotValueProvider> m_sessionAttributeProviders = new ConcurrentHashMap<>();
+    private final Map<String, String> m_sessionAttributeCache = new ConcurrentHashMap<>();
 
     private final CopyOnWriteArrayList<PilotActionListener> m_actionListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<PilotSessionListener> m_sessionListeners = new CopyOnWriteArrayList<>();
@@ -290,6 +292,29 @@ public final class Pilot {
     }
 
     /**
+     * Register a dynamic session attribute provider.
+     * The provider is called on each heartbeat cycle; if the resolved value
+     * differs from the cached one, updated attributes are sent to the server.
+     */
+    public static void addSessionAttributeProvider(@NonNull String key, @NonNull PilotValueProvider provider) {
+        Pilot p = s_instance;
+        if (p != null) {
+            p.m_sessionAttributeProviders.put(key, provider);
+        }
+    }
+
+    /**
+     * Remove a dynamic session attribute provider.
+     */
+    public static void removeSessionAttributeProvider(@NonNull String key) {
+        Pilot p = s_instance;
+        if (p != null) {
+            p.m_sessionAttributeProviders.remove(key);
+            p.m_sessionAttributeCache.remove(key);
+        }
+    }
+
+    /**
      * Acknowledge an action from the dashboard.
      *
      * @param actionId   ID of the action to acknowledge
@@ -438,7 +463,7 @@ public final class Pilot {
             deviceName = Build.MODEL + " (Android " + Build.VERSION.RELEASE + ")";
         }
 
-        PilotConnectResponse resp = m_httpClient.connect(deviceId, deviceName, m_config.sessionAttributes);
+        PilotConnectResponse resp = m_httpClient.connect(deviceId, deviceName, resolveAllSessionAttributes());
         m_requestId.set(resp.getRequestId());
 
         PilotLog.i("Connect request sent, request_id=%s, status=%s", resp.getRequestId(), resp.getStatus());
@@ -529,6 +554,10 @@ public final class Pilot {
 
     private void doHeartbeat(@NonNull String sessionToken) {
         if (!m_running.get()) return;
+
+        // Check dynamic session attributes for changes
+        checkSessionAttributeUpdates(sessionToken);
+
         try {
             m_httpClient.heartbeat(sessionToken);
         } catch (PilotException e) {
@@ -687,6 +716,56 @@ public final class Pilot {
             // Re-add failed logs to buffer
             synchronized (m_logBuffer) {
                 m_logBuffer.addAll(0, batch);
+            }
+        }
+    }
+
+    private Map<String, String> resolveAllSessionAttributes() {
+        Map<String, String> merged = new ConcurrentHashMap<>(m_config.sessionAttributes);
+
+        for (Map.Entry<String, PilotValueProvider> entry : m_sessionAttributeProviders.entrySet()) {
+            try {
+                Object value = entry.getValue().getValue();
+                String str = String.valueOf(value);
+                merged.put(entry.getKey(), str);
+                m_sessionAttributeCache.put(entry.getKey(), str);
+            } catch (Exception e) {
+                PilotLog.e("Session attribute provider failed: " + entry.getKey(), e);
+            }
+        }
+
+        return merged;
+    }
+
+    private void checkSessionAttributeUpdates(@NonNull String sessionToken) {
+        if (m_sessionAttributeProviders.isEmpty()) return;
+
+        Map<String, String> changed = null;
+
+        for (Map.Entry<String, PilotValueProvider> entry : m_sessionAttributeProviders.entrySet()) {
+            try {
+                Object value = entry.getValue().getValue();
+                String str = String.valueOf(value);
+                String cached = m_sessionAttributeCache.get(entry.getKey());
+
+                if (!str.equals(cached)) {
+                    m_sessionAttributeCache.put(entry.getKey(), str);
+                    if (changed == null) {
+                        changed = new ConcurrentHashMap<>();
+                    }
+                    changed.put(entry.getKey(), str);
+                }
+            } catch (Exception e) {
+                PilotLog.e("Session attribute provider failed: " + entry.getKey(), e);
+            }
+        }
+
+        if (changed != null) {
+            try {
+                m_httpClient.updateSessionAttributes(sessionToken, changed);
+                PilotLog.d("Session attributes updated: %s", changed.keySet());
+            } catch (PilotException e) {
+                PilotLog.e("Failed to update session attributes", e);
             }
         }
     }

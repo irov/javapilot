@@ -134,6 +134,26 @@ final class PilotHttpClient {
         execute(request);
     }
 
+    void updateSessionAttributes(@NonNull String sessionToken,
+                                 @NonNull Map<String, String> attributes) throws PilotException {
+        JSONObject body = new JSONObject();
+        try {
+            JSONObject attrs = new JSONObject();
+            for (Map.Entry<String, String> entry : attributes.entrySet()) {
+                attrs.put(entry.getKey(), entry.getValue());
+            }
+            body.put("session_attributes", attrs);
+        } catch (JSONException e) {
+            throw new PilotException("Failed to build attributes request", e);
+        }
+
+        Request request = sessionTokenRequest("/api/client/session/attributes", sessionToken)
+                .patch(jsonBody(body))
+                .build();
+
+        execute(request);
+    }
+
     void sendLogs(@NonNull String sessionToken, @NonNull List<PilotLogEntry> logs,
                   @Nullable JSONObject attributes) throws PilotException {
         if (logs.isEmpty()) {
