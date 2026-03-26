@@ -1,6 +1,8 @@
 package org.pilot.sdk;
 
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -12,7 +14,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -79,6 +83,7 @@ public final class Pilot {
 
     private PilotPanel m_currentPanel;
     private final PilotUI m_ui = new PilotUI();
+    private final Handler m_mainHandler = new Handler(Looper.getMainLooper());
 
     private Pilot(@NonNull PilotConfig config) {
         m_config = config;
@@ -430,8 +435,17 @@ public final class Pilot {
 
         // Send UI (tab-based) if any tabs exist
         if (m_ui.hasTabs()) {
-            m_ui.clearDirty();
-            doSubmitUI(sessionToken);
+            JSONObject snapshot = buildUISnapshotOnMainThread();
+            if (snapshot != null) {
+                try {
+                    m_httpClient.submitPanel(sessionToken, snapshot);
+                    m_ui.markSent();
+                    PilotLog.d("Initial UI submitted (revision=%d)", m_ui.getRevision());
+                } catch (PilotException e) {
+                    PilotLog.e("Failed to submit initial UI", e);
+                    notifyError(e);
+                }
+            }
         }
 
         // Start background tasks
@@ -481,14 +495,19 @@ public final class Pilot {
     private void doPollActions(@NonNull String sessionToken) {
         if (!m_running.get()) return;
 
-        // Poll value providers (compare with cache, mark dirty if changed)
-        m_ui.pollValues();
+        // Poll value providers + snapshot UI on Main Thread
+        JSONObject uiSnapshot = snapshotUIOnMainThread();
 
-        // Auto-send UI if changed
-        if (m_ui.isDirty()) {
-            m_ui.incrementRevision();
-            m_ui.clearDirty();
-            doSubmitUI(sessionToken);
+        // Send UI if snapshot was produced (means there were unsent changes)
+        if (uiSnapshot != null) {
+            try {
+                m_httpClient.submitPanel(sessionToken, uiSnapshot);
+                m_ui.markSent();
+                PilotLog.d("UI submitted (revision=%d)", m_ui.getRevision());
+            } catch (PilotException e) {
+                PilotLog.e("Failed to submit UI", e);
+                notifyError(e);
+            }
         }
 
         try {
@@ -499,22 +518,7 @@ public final class Pilot {
                     JSONObject actionJson = actionsArr.optJSONObject(i);
                     if (actionJson != null) {
                         PilotAction action = PilotAction.fromJson(actionJson);
-
-                        // Dispatch to per-widget callback (PilotUI)
-                        try {
-                            m_ui.dispatchAction(action);
-                        } catch (Exception ex) {
-                            PilotLog.e("Widget callback threw exception", ex);
-                        }
-
-                        // Notify global action listeners
-                        for (PilotActionListener listener : m_actionListeners) {
-                            try {
-                                listener.onPilotActionReceived(action);
-                            } catch (Exception ex) {
-                                PilotLog.e("Action listener threw exception", ex);
-                            }
-                        }
+                        dispatchActionOnMainThread(action);
                     }
                 }
             }
@@ -527,6 +531,79 @@ public final class Pilot {
         }
     }
 
+    /**
+     * Run pollValues + toJson on the Main Thread to avoid races with UI mutations.
+     * Returns null if there are no unsent changes.
+     */
+    @Nullable
+    private JSONObject snapshotUIOnMainThread() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            m_ui.pollValues();
+            return m_ui.hasUnsent() ? m_ui.toJson() : null;
+        }
+
+        FutureTask<JSONObject> task = new FutureTask<>(() -> {
+            m_ui.pollValues();
+            return m_ui.hasUnsent() ? m_ui.toJson() : null;
+        });
+        m_mainHandler.post(task);
+
+        try {
+            return task.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            PilotLog.e("Failed to snapshot UI on main thread", e);
+            return null;
+        }
+    }
+
+    /**
+     * Build a UI snapshot on the Main Thread unconditionally (for initial submit).
+     */
+    @Nullable
+    private JSONObject buildUISnapshotOnMainThread() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return m_ui.toJson();
+        }
+
+        FutureTask<JSONObject> task = new FutureTask<>(() -> m_ui.toJson());
+        m_mainHandler.post(task);
+
+        try {
+            return task.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            PilotLog.e("Failed to build UI snapshot on main thread", e);
+            return null;
+        }
+    }
+
+    /**
+     * Dispatch an action callback on the Main Thread so that any UI mutations
+     * triggered by the callback stay on the same thread as other UI operations.
+     */
+    private void dispatchActionOnMainThread(@NonNull PilotAction action) {
+        m_mainHandler.post(() -> {
+            try {
+                m_ui.dispatchAction(action);
+            } catch (Exception ex) {
+                PilotLog.e("Widget callback threw exception", ex);
+            }
+
+            for (PilotActionListener listener : m_actionListeners) {
+                try {
+                    listener.onPilotActionReceived(action);
+                } catch (Exception ex) {
+                    PilotLog.e("Action listener threw exception", ex);
+                }
+            }
+        });
+    }
+
     private void doSubmitPanel(@NonNull String sessionToken, @NonNull PilotPanel panel) {
         if (m_executor == null || m_executor.isShutdown()) return;
         m_executor.execute(() -> {
@@ -535,19 +612,6 @@ public final class Pilot {
                 PilotLog.d("Panel submitted (revision=%d)", panel.getRevision());
             } catch (PilotException e) {
                 PilotLog.e("Failed to submit panel", e);
-                notifyError(e);
-            }
-        });
-    }
-
-    private void doSubmitUI(@NonNull String sessionToken) {
-        if (m_executor == null || m_executor.isShutdown()) return;
-        m_executor.execute(() -> {
-            try {
-                m_httpClient.submitPanel(sessionToken, m_ui.toJson());
-                PilotLog.d("UI submitted (revision=%d)", m_ui.getRevision());
-            } catch (PilotException e) {
-                PilotLog.e("Failed to submit UI", e);
                 notifyError(e);
             }
         });

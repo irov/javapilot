@@ -6,7 +6,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -62,6 +61,7 @@ public final class PilotLayout {
     public PilotLayout addVertical() {
         PilotLayout sub = new PilotLayout(m_ui, Direction.VERTICAL);
         m_children.add(sub);
+        m_ui.incrementRevision();
         return sub;
     }
 
@@ -69,6 +69,7 @@ public final class PilotLayout {
     public PilotLayout addHorizontal() {
         PilotLayout sub = new PilotLayout(m_ui, Direction.HORIZONTAL);
         m_children.add(sub);
+        m_ui.incrementRevision();
         return sub;
     }
 
@@ -77,6 +78,7 @@ public final class PilotLayout {
     @NonNull
     public PilotLayout addPadding(double weight) {
         m_children.add(new PaddingElement(weight));
+        m_ui.incrementRevision();
         return this;
     }
 
@@ -86,6 +88,7 @@ public final class PilotLayout {
     public PilotButton addButton(@NonNull String label) {
         PilotButton w = new PilotButton(m_ui, label);
         m_children.add(w);
+        m_ui.incrementRevision();
         return w;
     }
 
@@ -93,6 +96,7 @@ public final class PilotLayout {
     public PilotLabel addLabel(@NonNull String text) {
         PilotLabel w = new PilotLabel(m_ui, text);
         m_children.add(w);
+        m_ui.incrementRevision();
         return w;
     }
 
@@ -100,6 +104,7 @@ public final class PilotLayout {
     public PilotStat addStat(@NonNull String label) {
         PilotStat w = new PilotStat(m_ui, label);
         m_children.add(w);
+        m_ui.incrementRevision();
         return w;
     }
 
@@ -107,6 +112,7 @@ public final class PilotLayout {
     public PilotSwitch addSwitch(@NonNull String label) {
         PilotSwitch w = new PilotSwitch(m_ui, label);
         m_children.add(w);
+        m_ui.incrementRevision();
         return w;
     }
 
@@ -114,6 +120,7 @@ public final class PilotLayout {
     public PilotInput addInput(@NonNull String label) {
         PilotInput w = new PilotInput(m_ui, label);
         m_children.add(w);
+        m_ui.incrementRevision();
         return w;
     }
 
@@ -121,6 +128,7 @@ public final class PilotLayout {
     public PilotSelect addSelect(@NonNull String label) {
         PilotSelect w = new PilotSelect(m_ui, label);
         m_children.add(w);
+        m_ui.incrementRevision();
         return w;
     }
 
@@ -128,6 +136,7 @@ public final class PilotLayout {
     public PilotTextarea addTextarea(@NonNull String label) {
         PilotTextarea w = new PilotTextarea(m_ui, label);
         m_children.add(w);
+        m_ui.incrementRevision();
         return w;
     }
 
@@ -135,6 +144,7 @@ public final class PilotLayout {
     public PilotTable addTable(@NonNull String label) {
         PilotTable w = new PilotTable(m_ui, label);
         m_children.add(w);
+        m_ui.incrementRevision();
         return w;
     }
 
@@ -142,6 +152,7 @@ public final class PilotLayout {
     public PilotLogs addLogs(@NonNull String label) {
         PilotLogs w = new PilotLogs(m_ui, label);
         m_children.add(w);
+        m_ui.incrementRevision();
         return w;
     }
 

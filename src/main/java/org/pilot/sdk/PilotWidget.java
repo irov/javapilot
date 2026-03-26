@@ -56,7 +56,7 @@ public class PilotWidget<T extends PilotWidget<T>> {
     protected void put(@NonNull String key, @Nullable Object value) {
         try {
             m_json.put(key, value);
-            m_ui.markDirty();
+            m_ui.incrementRevision();
         } catch (JSONException ignored) {
         }
     }

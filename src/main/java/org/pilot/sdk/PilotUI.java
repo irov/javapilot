@@ -44,8 +44,8 @@ public final class PilotUI {
     private final Set<PilotWidget<?>> m_providers = ConcurrentHashMap.newKeySet();
     private final AtomicInteger m_idCounter = new AtomicInteger(0);
     private int m_version = 2;
-    private int m_revision = 1;
-    private volatile boolean m_dirty = false;
+    private final AtomicInteger m_revision = new AtomicInteger(1);
+    private int m_sentRevision = 0;
 
     PilotUI() {
     }
@@ -66,11 +66,12 @@ public final class PilotUI {
      * @return The new tab for building its layout
      */
     @NonNull
-    public synchronized PilotTab addTab(@NonNull String id, @NonNull String title) {
+    @NonNull
+    public PilotTab addTab(@NonNull String id, @NonNull String title) {
         m_tabs.removeIf(t -> t.getId().equals(id));
         PilotTab tab = new PilotTab(this, id, title);
         m_tabs.add(tab);
-        markDirty();
+        m_revision.incrementAndGet();
         return tab;
     }
 
@@ -78,7 +79,8 @@ public final class PilotUI {
      * Get an existing tab by id.
      */
     @Nullable
-    public synchronized PilotTab getTab(@NonNull String id) {
+    @Nullable
+    public PilotTab getTab(@NonNull String id) {
         for (PilotTab tab : m_tabs) {
             if (tab.getId().equals(id)) {
                 return tab;
@@ -90,9 +92,9 @@ public final class PilotUI {
     /**
      * Remove a tab by id.
      */
-    public synchronized void removeTab(@NonNull String id) {
+    public void removeTab(@NonNull String id) {
         m_tabs.removeIf(t -> t.getId().equals(id));
-        markDirty();
+        m_revision.incrementAndGet();
     }
 
     // ── Widget callbacks ──
@@ -130,57 +132,58 @@ public final class PilotUI {
     }
 
     /**
-     * Poll all value providers. If any value changed, marks dirty.
+     * Poll all value providers. If any value changed, increments revision.
      * Called on the SDK poll thread.
      */
     void pollValues() {
         for (PilotWidget<?> w : m_providers) {
             if (w.pollProvider()) {
-                m_dirty = true;
+                m_revision.incrementAndGet();
             }
         }
     }
 
-    // ── Dirty tracking ──
+    // ── Revision tracking ──
 
     /**
-     * Mark the UI as changed. Called automatically by tabs/widgets.
-     * The SDK will send the update on the next poll cycle.
+     * Increment UI revision. Called automatically by tabs/widgets/layouts
+     * when structure or values change.
      */
-    void markDirty() {
-        m_dirty = true;
+    void incrementRevision() {
+        m_revision.incrementAndGet();
     }
 
-    boolean isDirty() {
-        return m_dirty;
+    /**
+     * Whether there are unsent changes.
+     */
+    boolean hasUnsent() {
+        return m_revision.get() != m_sentRevision;
     }
 
-    void clearDirty() {
-        m_dirty = false;
+    /**
+     * Mark the current revision as sent.
+     */
+    void markSent() {
+        m_sentRevision = m_revision.get();
     }
 
     boolean hasTabs() {
         return !m_tabs.isEmpty();
     }
 
-    // ── Revision ──
-
     public int getRevision() {
-        return m_revision;
-    }
-
-    public int incrementRevision() {
-        return ++m_revision;
+        return m_revision.get();
     }
 
     // ── Serialization ──
 
     @NonNull
-    public synchronized JSONObject toJson() {
+    @NonNull
+    public JSONObject toJson() {
         JSONObject json = new JSONObject();
         try {
             json.put("version", m_version);
-            json.put("revision", m_revision);
+            json.put("revision", m_revision.get());
 
             JSONArray tabsArr = new JSONArray();
             for (PilotTab tab : m_tabs) {
