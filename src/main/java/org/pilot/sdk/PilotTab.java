@@ -75,7 +75,7 @@ public final class PilotTab {
     JSONObject toJson() {
         JSONObject json = new JSONObject();
         try {
-            json.put("id", m_internalId);
+            json.put("id", String.valueOf(m_internalId));
             json.put("title", m_title);
             if (m_layout != null) {
                 json.put("layout", m_layout.toJson());
