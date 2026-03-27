@@ -11,7 +11,6 @@ public final class PilotConfig {
     final String deviceId;
     final String deviceName;
     final long pollIntervalMs;
-    final long heartbeatIntervalMs;
     final long actionPollIntervalMs;
     final boolean autoConnect;
     final PilotSessionListener sessionListener;
@@ -26,7 +25,6 @@ public final class PilotConfig {
         this.deviceId = builder.deviceId;
         this.deviceName = builder.deviceName;
         this.pollIntervalMs = builder.pollIntervalMs;
-        this.heartbeatIntervalMs = builder.heartbeatIntervalMs;
         this.actionPollIntervalMs = builder.actionPollIntervalMs;
         this.autoConnect = builder.autoConnect;
         this.sessionListener = builder.sessionListener;
@@ -62,7 +60,6 @@ public final class PilotConfig {
         private String deviceId;
         private String deviceName;
         private long pollIntervalMs = 10000;
-        private long heartbeatIntervalMs = 60000;
         private long actionPollIntervalMs = 2000;
         private boolean autoConnect = true;
         private PilotSessionListener sessionListener = null;
@@ -92,11 +89,6 @@ public final class PilotConfig {
 
         public Builder setPollIntervalMs(long ms) {
             this.pollIntervalMs = ms;
-            return this;
-        }
-
-        public Builder setHeartbeatIntervalMs(long ms) {
-            this.heartbeatIntervalMs = ms;
             return this;
         }
 
@@ -145,8 +137,7 @@ public final class PilotConfig {
          * <pre>{@code
          * PilotLogConfigBuilder logConfig = new PilotLogConfigBuilder()
          *     .setLogLevel(PilotLogLevel.INFO)
-         *     .setLogger(new MyLogger())
-         *     .setFlushIntervalMs(5000)
+         *     .setLoggerListener(new MyLoggerListener())
          *     .setAttributes(new PilotLogAttributeBuilder()
          *         .putProvider("screen_name", () -> currentScreen));
          *
@@ -165,7 +156,6 @@ public final class PilotConfig {
          * PilotMetricConfigBuilder metricConfig = new PilotMetricConfigBuilder()
          *     .setEnabled(true)
          *     .setSampleIntervalMs(200)
-         *     .setFlushIntervalMs(5000)
          *     .addCollector(out -> {
          *         out.add(new PilotMetricEntry(PilotMetricType.DRAW_CALLS, renderer.getDrawCalls()));
          *     });

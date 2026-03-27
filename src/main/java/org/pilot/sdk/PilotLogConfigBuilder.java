@@ -5,14 +5,12 @@ import androidx.annotation.Nullable;
 
 /**
  * Builder for log subsystem configuration.
- * Controls log level, custom logger, flush interval, buffer/batch sizes,
- * and log attributes.
+ * Controls log level, custom logger listener, buffer/batch sizes, and log attributes.
  *
  * <pre>{@code
  * PilotLogConfigBuilder logConfig = new PilotLogConfigBuilder()
  *     .setLogLevel(PilotLogLevel.INFO)
- *     .setLogger(new MyLogger())
- *     .setFlushIntervalMs(5000)
+ *     .setLoggerListener(new MyLoggerListener())
  *     .setAttributes(new PilotLogAttributeBuilder()
  *         .putProvider("screen_name", () -> currentScreen));
  *
@@ -23,8 +21,7 @@ import androidx.annotation.Nullable;
  */
 public final class PilotLogConfigBuilder {
     private PilotLogLevel m_logLevel = PilotLogLevel.INFO;
-    private PilotLogger m_logger = null;
-    private long m_flushIntervalMs = 5000;
+    private PilotLoggerListener m_loggerListener = null;
     private int m_batchSize = 100;
     private int m_bufferSize = 1000;
     private PilotLogAttributeBuilder m_attributes = new PilotLogAttributeBuilder();
@@ -40,22 +37,12 @@ public final class PilotLogConfigBuilder {
     }
 
     /**
-     * Set a custom logger to redirect all SDK log output.
+     * Set a listener for internal SDK diagnostic logs.
      * If not set, logs go to android.util.Log.
      */
     @NonNull
-    public PilotLogConfigBuilder setLogger(@Nullable PilotLogger logger) {
-        m_logger = logger;
-        return this;
-    }
-
-    /**
-     * Set the interval for flushing buffered logs to the server.
-     * Default: 5000 ms.
-     */
-    @NonNull
-    public PilotLogConfigBuilder setFlushIntervalMs(long ms) {
-        m_flushIntervalMs = ms;
+    public PilotLogConfigBuilder setLoggerListener(@Nullable PilotLoggerListener loggerListener) {
+        m_loggerListener = loggerListener;
         return this;
     }
 
@@ -96,12 +83,8 @@ public final class PilotLogConfigBuilder {
     }
 
     @Nullable
-    PilotLogger getLogger() {
-        return m_logger;
-    }
-
-    long getFlushIntervalMs() {
-        return m_flushIntervalMs;
+    PilotLoggerListener getLoggerListener() {
+        return m_loggerListener;
     }
 
     int getBatchSize() {

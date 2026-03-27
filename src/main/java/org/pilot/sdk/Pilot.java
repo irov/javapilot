@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.20";
+    public static final String VERSION = "1.0.21";
 
     private static volatile Pilot s_instance;
 
@@ -87,9 +87,7 @@ public final class Pilot {
 
     private ScheduledExecutorService m_executor;
     private ScheduledFuture<?> m_actionPollFuture;
-    private ScheduledFuture<?> m_logFlushFuture;
     private ScheduledFuture<?> m_metricSampleFuture;
-    private ScheduledFuture<?> m_metricFlushFuture;
 
     private final PilotUI m_ui = new PilotUI();
     private final PilotMetrics m_metrics = new PilotMetrics();
@@ -100,7 +98,7 @@ public final class Pilot {
         m_config = config;
         m_httpClient = new PilotHttpClient(config.baseUrl, config.apiToken);
         PilotLog.setLevel(config.logConfig.getLogLevel());
-        PilotLog.setLogger(config.logConfig.getLogger());
+        PilotLog.setLoggerListener(config.logConfig.getLoggerListener());
 
         PilotMetricConfigBuilder mc = config.metricConfig;
         if (mc.isEnabled()) {
@@ -534,14 +532,7 @@ public final class Pilot {
                 TimeUnit.MILLISECONDS
         );
 
-        m_logFlushFuture = m_executor.scheduleAtFixedRate(
-                () -> flushLogs(sessionToken),
-                m_config.logConfig.getFlushIntervalMs(),
-                m_config.logConfig.getFlushIntervalMs(),
-                TimeUnit.MILLISECONDS
-        );
-
-        // Start metric sampling and flushing
+        // Start metric sampling
         if (m_config.metricConfig.isEnabled()) {
             m_fpsTracker.start();
 
@@ -550,14 +541,6 @@ public final class Pilot {
                     () -> m_metrics.sample(),
                     sampleMs,
                     sampleMs,
-                    TimeUnit.MILLISECONDS
-            );
-
-            long flushMs = m_config.metricConfig.getFlushIntervalMs();
-            m_metricFlushFuture = m_executor.scheduleAtFixedRate(
-                    () -> flushMetrics(sessionToken),
-                    flushMs,
-                    flushMs,
                     TimeUnit.MILLISECONDS
             );
         }
@@ -574,6 +557,8 @@ public final class Pilot {
         if (!m_running.get()) return;
 
         Map<String, Object> changedAttrs = resolveChangedSessionAttributes();
+        List<PilotLogEntry> logChunk = drainLogChunk();
+        List<PilotMetricEntry> metricChunk = m_metrics.drain();
 
         // Poll value providers + snapshot UI on Main Thread
         JSONObject uiSnapshot = snapshotUIOnMainThread();
@@ -591,7 +576,7 @@ public final class Pilot {
         }
 
         try {
-            JSONObject json = m_httpClient.pollActions(sessionToken, changedAttrs);
+            JSONObject json = m_httpClient.pollActions(sessionToken, changedAttrs, logChunk, metricChunk);
             JSONArray actionsArr = json.optJSONArray("actions");
             if (actionsArr != null && actionsArr.length() > 0) {
                 for (int i = 0; i < actionsArr.length(); i++) {
@@ -602,7 +587,14 @@ public final class Pilot {
                     }
                 }
             }
+
+            if (!logChunk.isEmpty()) {
+                m_logOverflowWarned.set(false);
+            }
         } catch (PilotException e) {
+            requeueLogs(logChunk);
+            m_metrics.requeue(metricChunk);
+
             if (e.isSessionGone()) {
                 handleSessionGone();
             } else {
@@ -698,47 +690,28 @@ public final class Pilot {
         }
     }
 
-    private void flushLogs(@NonNull String sessionToken) {
-        if (m_logBuffer.isEmpty()) return;
+    @NonNull
+    private List<PilotLogEntry> drainLogChunk() {
+        if (m_logBuffer.isEmpty()) return Collections.emptyList();
 
-        List<PilotLogEntry> chunk;
         synchronized (m_logBuffer) {
             int count = Math.min(m_logBuffer.size(), m_config.logConfig.getBatchSize());
-            chunk = new ArrayList<>(m_logBuffer.subList(0, count));
+            List<PilotLogEntry> chunk = new ArrayList<>(m_logBuffer.subList(0, count));
             m_logBuffer.subList(0, count).clear();
-        }
-
-        try {
-            m_httpClient.sendLogs(sessionToken, chunk);
-
-            m_logOverflowWarned.set(false);
-        } catch (PilotException e) {
-            PilotLog.e("Failed to flush logs", e);
-
-            if (e.isNetworkError() || e.getHttpCode() >= 500) {
-                synchronized (m_logBuffer) {
-                    m_logBuffer.addAll(0, chunk);
-
-                    // Trim to max buffer size
-                    while (m_logBuffer.size() > m_config.logConfig.getBufferSize()) {
-                        m_logBuffer.remove(m_logBuffer.size() - 1);
-                    }
-                }
-            }
+            return chunk;
         }
     }
 
-    private void flushMetrics(@NonNull String sessionToken) {
-        List<PilotMetricEntry> chunk = m_metrics.drain();
-        if (chunk.isEmpty()) return;
+    private void requeueLogs(@NonNull List<PilotLogEntry> chunk) {
+        if (chunk.isEmpty()) {
+            return;
+        }
 
-        try {
-            m_httpClient.sendMetrics(sessionToken, chunk);
-        } catch (PilotException e) {
-            PilotLog.e("Failed to flush metrics", e);
+        synchronized (m_logBuffer) {
+            m_logBuffer.addAll(0, chunk);
 
-            if (e.isNetworkError() || e.getHttpCode() >= 500) {
-                m_metrics.requeue(chunk);
+            while (m_logBuffer.size() > m_config.logConfig.getBufferSize()) {
+                m_logBuffer.remove(m_logBuffer.size() - 1);
             }
         }
     }
@@ -839,17 +812,9 @@ public final class Pilot {
             m_actionPollFuture.cancel(false);
             m_actionPollFuture = null;
         }
-        if (m_logFlushFuture != null) {
-            m_logFlushFuture.cancel(false);
-            m_logFlushFuture = null;
-        }
         if (m_metricSampleFuture != null) {
             m_metricSampleFuture.cancel(false);
             m_metricSampleFuture = null;
-        }
-        if (m_metricFlushFuture != null) {
-            m_metricFlushFuture.cancel(false);
-            m_metricFlushFuture = null;
         }
     }
 

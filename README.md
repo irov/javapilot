@@ -127,12 +127,21 @@ Pilot.log(PilotLogLevel.ERROR, "Crash detected", "crashes", "worker-3", meta);
 ## Custom logger
 
 ```java
-PilotConfig config = new PilotConfig.Builder(url, token)
-    .setLogger((level, tag, message, throwable) -> {
+PilotLogConfigBuilder logConfig = new PilotLogConfigBuilder()
+    .setLoggerListener((level, tag, message, throwable) -> {
         MyLogger.log(tag + ": " + message);
-    })
+    });
+
+PilotConfig config = new PilotConfig.Builder(url, token)
+    .setLogConfig(logConfig)
     .build();
 ```
+
+Internal SDK diagnostic logs are delivered on the action poll cycle. There is no separate log flush interval.
+
+Metrics are sampled locally at `sampleIntervalMs` and flushed on the same poll cycle, preserving their client timestamps.
+
+The action poll request also acts as the session heartbeat. There is no separate heartbeat request.
 
 ## Requirements
 

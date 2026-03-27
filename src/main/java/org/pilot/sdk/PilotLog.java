@@ -6,27 +6,27 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 /**
- * Internal SDK logger. Delegates to {@link PilotLogger} if set, otherwise to android.util.Log.
+ * Internal SDK logger. Delegates to {@link PilotLoggerListener} if set, otherwise to android.util.Log.
  */
 final class PilotLog {
     private static final String TAG = "PilotSDK";
     private static PilotLogLevel s_level = PilotLogLevel.INFO;
-    private static volatile PilotLogger s_logger = null;
+    private static volatile PilotLoggerListener s_loggerListener = null;
 
     static void setLevel(@NonNull PilotLogLevel level) {
         s_level = level;
     }
 
-    static void setLogger(@Nullable PilotLogger logger) {
-        s_logger = logger;
+    static void setLoggerListener(@Nullable PilotLoggerListener loggerListener) {
+        s_loggerListener = loggerListener;
     }
 
     static void d(@NonNull String message, Object... args) {
         if (s_level.ordinal() <= PilotLogLevel.DEBUG.ordinal()) {
             String msg = format(message, args);
-            PilotLogger logger = s_logger;
-            if (logger != null) {
-                logger.log(PilotLogLevel.DEBUG, TAG, msg, null);
+            PilotLoggerListener loggerListener = s_loggerListener;
+            if (loggerListener != null) {
+                loggerListener.onPilotLoggerMessage(PilotLogLevel.DEBUG, TAG, msg, null);
             } else {
                 Log.d(TAG, msg);
             }
@@ -36,9 +36,9 @@ final class PilotLog {
     static void i(@NonNull String message, Object... args) {
         if (s_level.ordinal() <= PilotLogLevel.INFO.ordinal()) {
             String msg = format(message, args);
-            PilotLogger logger = s_logger;
-            if (logger != null) {
-                logger.log(PilotLogLevel.INFO, TAG, msg, null);
+            PilotLoggerListener loggerListener = s_loggerListener;
+            if (loggerListener != null) {
+                loggerListener.onPilotLoggerMessage(PilotLogLevel.INFO, TAG, msg, null);
             } else {
                 Log.i(TAG, msg);
             }
@@ -48,9 +48,9 @@ final class PilotLog {
     static void w(@NonNull String message, Object... args) {
         if (s_level.ordinal() <= PilotLogLevel.WARNING.ordinal()) {
             String msg = format(message, args);
-            PilotLogger logger = s_logger;
-            if (logger != null) {
-                logger.log(PilotLogLevel.WARNING, TAG, msg, null);
+            PilotLoggerListener loggerListener = s_loggerListener;
+            if (loggerListener != null) {
+                loggerListener.onPilotLoggerMessage(PilotLogLevel.WARNING, TAG, msg, null);
             } else {
                 Log.w(TAG, msg);
             }
@@ -60,9 +60,9 @@ final class PilotLog {
     static void e(@NonNull String message, Object... args) {
         if (s_level.ordinal() <= PilotLogLevel.ERROR.ordinal()) {
             String msg = format(message, args);
-            PilotLogger logger = s_logger;
-            if (logger != null) {
-                logger.log(PilotLogLevel.ERROR, TAG, msg, null);
+            PilotLoggerListener loggerListener = s_loggerListener;
+            if (loggerListener != null) {
+                loggerListener.onPilotLoggerMessage(PilotLogLevel.ERROR, TAG, msg, null);
             } else {
                 Log.e(TAG, msg);
             }
@@ -70,9 +70,9 @@ final class PilotLog {
     }
 
     static void e(@NonNull String message, @NonNull Throwable t) {
-        PilotLogger logger = s_logger;
-        if (logger != null) {
-            logger.log(PilotLogLevel.EXCEPTION, TAG, message, t);
+        PilotLoggerListener loggerListener = s_loggerListener;
+        if (loggerListener != null) {
+            loggerListener.onPilotLoggerMessage(PilotLogLevel.EXCEPTION, TAG, message, t);
         } else {
             Log.e(TAG, message, t);
         }

@@ -7,14 +7,12 @@ import java.util.List;
 
 /**
  * Builder for metric subsystem configuration.
- * Controls whether metrics are enabled, sampling rate, buffer sizes,
- * and allows registering custom collectors.
+ * Controls whether metrics are enabled, sampling rate, buffer sizes, and allows registering custom collectors.
  *
  * <pre>{@code
  * PilotMetricConfigBuilder metricConfig = new PilotMetricConfigBuilder()
  *     .setEnabled(true)
  *     .setSampleIntervalMs(200)
- *     .setFlushIntervalMs(5000)
  *     .addCollector(out -> {
  *         out.add(new PilotMetricEntry(PilotMetricType.DRAW_CALLS, renderer.getDrawCalls()));
  *         out.add(new PilotMetricEntry(PilotMetricType.VIDEO_MEMORY, renderer.getVramUsage()));
@@ -28,7 +26,6 @@ import java.util.List;
 public final class PilotMetricConfigBuilder {
     private boolean m_enabled = true;
     private long m_sampleIntervalMs = 200;
-    private long m_flushIntervalMs = 5000;
     private int m_bufferSize = 2000;
     private int m_batchSize = 200;
     private final List<PilotMetricCollector> m_collectors = new ArrayList<>();
@@ -53,16 +50,6 @@ public final class PilotMetricConfigBuilder {
     @NonNull
     public PilotMetricConfigBuilder setSampleIntervalMs(long ms) {
         m_sampleIntervalMs = Math.max(100, Math.min(1000, ms));
-        return this;
-    }
-
-    /**
-     * Set the interval for flushing buffered metrics to the server.
-     * Default: 5000 ms.
-     */
-    @NonNull
-    public PilotMetricConfigBuilder setFlushIntervalMs(long ms) {
-        m_flushIntervalMs = ms;
         return this;
     }
 
@@ -111,10 +98,6 @@ public final class PilotMetricConfigBuilder {
 
     long getSampleIntervalMs() {
         return m_sampleIntervalMs;
-    }
-
-    long getFlushIntervalMs() {
-        return m_flushIntervalMs;
     }
 
     int getBufferSize() {

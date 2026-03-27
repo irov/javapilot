@@ -79,28 +79,6 @@ final class PilotHttpClient {
         return PilotConnectResponse.fromJson(execute(request));
     }
 
-    boolean heartbeat(@NonNull String sessionToken,
-                      @Nullable Map<String, Object> changedAttributes) throws PilotException {
-        JSONObject body = new JSONObject();
-        try {
-            if (changedAttributes != null && !changedAttributes.isEmpty()) {
-                JSONObject attrs = new JSONObject();
-                for (Map.Entry<String, Object> entry : changedAttributes.entrySet()) {
-                    attrs.put(entry.getKey(), entry.getValue());
-                }
-                body.put("session_attributes", attrs);
-            }
-        } catch (JSONException e) {
-            throw new PilotException("Failed to build heartbeat request", e);
-        }
-
-        Request request = sessionTokenRequest("/api/client/session/heartbeat", sessionToken)
-                .post(body.length() > 0 ? jsonBody(body) : EMPTY_BODY)
-                .build();
-
-        return execute(request).optBoolean("ok", false);
-    }
-
     boolean closeSession(@NonNull String sessionToken) throws PilotException {
         Request request = sessionTokenRequest("/api/client/session/close", sessionToken)
                 .post(EMPTY_BODY)
@@ -125,7 +103,9 @@ final class PilotHttpClient {
     }
 
     JSONObject pollActions(@NonNull String sessionToken,
-                           @Nullable Map<String, Object> changedAttributes) throws PilotException {
+                           @Nullable Map<String, Object> changedAttributes,
+                           @NonNull List<PilotLogEntry> logs,
+                           @NonNull List<PilotMetricEntry> metrics) throws PilotException {
         JSONObject body = new JSONObject();
         try {
             if (changedAttributes != null && !changedAttributes.isEmpty()) {
@@ -134,6 +114,22 @@ final class PilotHttpClient {
                     attrs.put(entry.getKey(), entry.getValue());
                 }
                 body.put("session_attributes", attrs);
+            }
+
+            if (!logs.isEmpty()) {
+                JSONArray logsArray = new JSONArray();
+                for (PilotLogEntry entry : logs) {
+                    logsArray.put(entry.toJson());
+                }
+                body.put("logs", logsArray);
+            }
+
+            if (!metrics.isEmpty()) {
+                JSONArray metricsArray = new JSONArray();
+                for (PilotMetricEntry entry : metrics) {
+                    metricsArray.put(entry.toJson());
+                }
+                body.put("metrics", metricsArray);
             }
         } catch (JSONException e) {
             throw new PilotException("Failed to build action poll request", e);
@@ -156,55 +152,6 @@ final class PilotHttpClient {
         }
 
         Request request = sessionTokenRequest("/api/client/session/actions/ack", sessionToken)
-                .post(jsonBody(body))
-                .build();
-
-        execute(request);
-    }
-
-
-    void sendLogs(@NonNull String sessionToken, @NonNull List<PilotLogEntry> logs) throws PilotException {
-        if (logs.isEmpty()) {
-            return;
-        }
-
-        JSONArray logsArray = new JSONArray();
-        for (PilotLogEntry entry : logs) {
-            logsArray.put(entry.toJson());
-        }
-
-        JSONObject body = new JSONObject();
-        try {
-            body.put("logs", logsArray);
-        } catch (JSONException e) {
-            throw new PilotException("Failed to build logs request", e);
-        }
-
-        Request request = sessionTokenRequest("/api/client/session/logs", sessionToken)
-                .post(jsonBody(body))
-                .build();
-
-        execute(request);
-    }
-
-    void sendMetrics(@NonNull String sessionToken, @NonNull List<PilotMetricEntry> metrics) throws PilotException {
-        if (metrics.isEmpty()) {
-            return;
-        }
-
-        JSONArray metricsArray = new JSONArray();
-        for (PilotMetricEntry entry : metrics) {
-            metricsArray.put(entry.toJson());
-        }
-
-        JSONObject body = new JSONObject();
-        try {
-            body.put("metrics", metricsArray);
-        } catch (JSONException e) {
-            throw new PilotException("Failed to build metrics request", e);
-        }
-
-        Request request = sessionTokenRequest("/api/client/session/metrics", sessionToken)
                 .post(jsonBody(body))
                 .build();
 
