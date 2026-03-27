@@ -124,9 +124,23 @@ final class PilotHttpClient {
         return execute(request);
     }
 
-    JSONObject pollActions(@NonNull String sessionToken) throws PilotException {
+    JSONObject pollActions(@NonNull String sessionToken,
+                           @Nullable Map<String, Object> changedAttributes) throws PilotException {
+        JSONObject body = new JSONObject();
+        try {
+            if (changedAttributes != null && !changedAttributes.isEmpty()) {
+                JSONObject attrs = new JSONObject();
+                for (Map.Entry<String, Object> entry : changedAttributes.entrySet()) {
+                    attrs.put(entry.getKey(), entry.getValue());
+                }
+                body.put("session_attributes", attrs);
+            }
+        } catch (JSONException e) {
+            throw new PilotException("Failed to build action poll request", e);
+        }
+
         Request request = sessionTokenRequest("/api/client/session/actions/poll", sessionToken)
-                .get()
+                .post(body.length() > 0 ? jsonBody(body) : EMPTY_BODY)
                 .build();
 
         return execute(request);

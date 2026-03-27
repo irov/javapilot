@@ -14,7 +14,7 @@ Lightweight Android SDK for connecting apps to **Pilot** — a real-time remote 
 - **Session attributes** — static and dynamic key-value pairs attached to the session, native types preserved (boolean, int, float, null)
 - **Log attributes** — static and dynamic key-value pairs attached to every log entry
 - **Circular log buffer** — configurable buffer size and batch size for log flushing
-- **Session management** — auto heartbeat, reconnection, lifecycle callbacks
+- **Session management** — approval polling, action-poll liveness, lifecycle callbacks
 - **Custom logger** — redirect SDK logs into your own logging system
 - **Zero dependencies on engine** — works with any Android project
 
@@ -32,7 +32,7 @@ dependencyResolutionManagement {
 
 // build.gradle
 dependencies {
-    implementation 'com.github.irov:javapilot:1.0.15'
+    implementation 'com.github.irov:javapilot:1.0.16'
 }
 ```
 
@@ -96,6 +96,13 @@ root.addLabel("label-status", "Idle")
 // and re-sent when widgets change
 Pilot.connect();
 ```
+
+## Connection flow
+
+- While the device is waiting for approval, the SDK polls approval status every 10 seconds by default.
+- After approval, action polling becomes the live session heartbeat.
+- Dynamic session attributes are piggybacked on action polling, so there is no separate active-session heartbeat loop.
+- You can still override timings with `setPollIntervalMs(...)` and `setActionPollIntervalMs(...)` if needed.
 
 ## Logging
 

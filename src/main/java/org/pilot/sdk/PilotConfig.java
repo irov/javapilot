@@ -70,7 +70,7 @@ public final class PilotConfig {
         private String apiToken;
         private String deviceId;
         private String deviceName;
-        private long pollIntervalMs = 2000;
+        private long pollIntervalMs = 10000;
         private long heartbeatIntervalMs = 60000;
         private long actionPollIntervalMs = 2000;
         private long logFlushIntervalMs = 5000;

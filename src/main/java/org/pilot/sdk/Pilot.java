@@ -65,7 +65,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.15";
+    public static final String VERSION = "1.0.16";
 
     private static volatile Pilot s_instance;
 
@@ -85,7 +85,6 @@ public final class Pilot {
     private final CopyOnWriteArrayList<PilotSessionListener> m_sessionListeners = new CopyOnWriteArrayList<>();
 
     private ScheduledExecutorService m_executor;
-    private ScheduledFuture<?> m_heartbeatFuture;
     private ScheduledFuture<?> m_actionPollFuture;
     private ScheduledFuture<?> m_logFlushFuture;
 
@@ -480,13 +479,6 @@ public final class Pilot {
         }
 
         // Start background tasks
-        m_heartbeatFuture = m_executor.scheduleAtFixedRate(
-                () -> doHeartbeat(sessionToken),
-                m_config.heartbeatIntervalMs,
-                m_config.heartbeatIntervalMs,
-                TimeUnit.MILLISECONDS
-        );
-
         m_actionPollFuture = m_executor.scheduleAtFixedRate(
                 () -> doPollActions(sessionToken),
                 0,
@@ -509,25 +501,10 @@ public final class Pilot {
         notifyRejected();
     }
 
-    private void doHeartbeat(@NonNull String sessionToken) {
+    private void doPollActions(@NonNull String sessionToken) {
         if (!m_running.get()) return;
 
         Map<String, Object> changedAttrs = resolveChangedSessionAttributes();
-
-        try {
-            m_httpClient.heartbeat(sessionToken, changedAttrs);
-        } catch (PilotException e) {
-            PilotLog.e("Heartbeat failed", e);
-            if (e.isSessionGone()) {
-                handleSessionGone();
-            } else {
-                notifyError(e);
-            }
-        }
-    }
-
-    private void doPollActions(@NonNull String sessionToken) {
-        if (!m_running.get()) return;
 
         // Poll value providers + snapshot UI on Main Thread
         JSONObject uiSnapshot = snapshotUIOnMainThread();
@@ -545,7 +522,7 @@ public final class Pilot {
         }
 
         try {
-            JSONObject json = m_httpClient.pollActions(sessionToken);
+            JSONObject json = m_httpClient.pollActions(sessionToken, changedAttrs);
             JSONArray actionsArr = json.optJSONArray("actions");
             if (actionsArr != null && actionsArr.length() > 0) {
                 for (int i = 0; i < actionsArr.length(); i++) {
@@ -774,10 +751,6 @@ public final class Pilot {
     }
 
     private void cancelScheduledTasks() {
-        if (m_heartbeatFuture != null) {
-            m_heartbeatFuture.cancel(false);
-            m_heartbeatFuture = null;
-        }
         if (m_actionPollFuture != null) {
             m_actionPollFuture.cancel(false);
             m_actionPollFuture = null;
