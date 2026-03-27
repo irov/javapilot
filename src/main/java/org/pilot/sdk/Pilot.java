@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.21";
+    public static final String VERSION = "1.0.22";
 
     private static volatile Pilot s_instance;
 
@@ -98,7 +98,7 @@ public final class Pilot {
         m_config = config;
         m_httpClient = new PilotHttpClient(config.baseUrl, config.apiToken);
         PilotLog.setLevel(config.logConfig.getLogLevel());
-        PilotLog.setLoggerListener(config.logConfig.getLoggerListener());
+        PilotLog.setLoggerListener(config.loggerListener);
 
         PilotMetricConfigBuilder mc = config.metricConfig;
         if (mc.isEnabled()) {
@@ -264,7 +264,7 @@ public final class Pilot {
      */
     public static void log(@NonNull PilotLogLevel level, @NonNull String message) {
         Pilot p = s_instance;
-        if (p != null) {
+        if (p != null && p.m_config.logConfig.isEnabled()) {
             p.bufferLog(new PilotLogEntry(level, message, null, null, null, p.resolveLogAttributes()));
         }
     }
@@ -275,7 +275,7 @@ public final class Pilot {
     public static void log(@NonNull PilotLogLevel level, @NonNull String message,
                            @Nullable String category, @Nullable String thread) {
         Pilot p = s_instance;
-        if (p != null) {
+        if (p != null && p.m_config.logConfig.isEnabled()) {
             p.bufferLog(new PilotLogEntry(level, message, category, thread, null, p.resolveLogAttributes()));
         }
     }
@@ -285,7 +285,7 @@ public final class Pilot {
      */
     public static void log(@NonNull PilotLogLevel level, @NonNull String message, @Nullable Map<String, Object> metadata) {
         Pilot p = s_instance;
-        if (p != null) {
+        if (p != null && p.m_config.logConfig.isEnabled()) {
             p.bufferLog(new PilotLogEntry(level, message, null, null, metadata, p.resolveLogAttributes()));
         }
     }
@@ -297,7 +297,7 @@ public final class Pilot {
                            @Nullable String category, @Nullable String thread,
                            @Nullable Map<String, Object> metadata) {
         Pilot p = s_instance;
-        if (p != null) {
+        if (p != null && p.m_config.logConfig.isEnabled()) {
             p.bufferLog(new PilotLogEntry(level, message, category, thread, metadata, p.resolveLogAttributes()));
         }
     }
@@ -307,7 +307,7 @@ public final class Pilot {
      */
     public static void log(@NonNull PilotLogEntry entry) {
         Pilot p = s_instance;
-        if (p != null) {
+        if (p != null && p.m_config.logConfig.isEnabled()) {
             p.bufferLog(entry);
         }
     }

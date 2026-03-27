@@ -5,12 +5,12 @@ import androidx.annotation.Nullable;
 
 /**
  * Builder for log subsystem configuration.
- * Controls log level, custom logger listener, buffer/batch sizes, and log attributes.
+ * Controls whether log sending is enabled, log level, buffer/batch sizes, and log attributes.
  *
  * <pre>{@code
  * PilotLogConfigBuilder logConfig = new PilotLogConfigBuilder()
+ *     .setEnabled(true)
  *     .setLogLevel(PilotLogLevel.INFO)
- *     .setLoggerListener(new MyLoggerListener())
  *     .setAttributes(new PilotLogAttributeBuilder()
  *         .putProvider("screen_name", () -> currentScreen));
  *
@@ -20,11 +20,21 @@ import androidx.annotation.Nullable;
  * }</pre>
  */
 public final class PilotLogConfigBuilder {
+    private boolean m_enabled = true;
     private PilotLogLevel m_logLevel = PilotLogLevel.INFO;
-    private PilotLoggerListener m_loggerListener = null;
     private int m_batchSize = 100;
     private int m_bufferSize = 1000;
     private PilotLogAttributeBuilder m_attributes = new PilotLogAttributeBuilder();
+
+    /**
+     * Enable or disable sending application logs to the Pilot server.
+     * Default: true.
+     */
+    @NonNull
+    public PilotLogConfigBuilder setEnabled(boolean enabled) {
+        m_enabled = enabled;
+        return this;
+    }
 
     /**
      * Set the minimum log level. Messages below this level are dropped.
@@ -33,16 +43,6 @@ public final class PilotLogConfigBuilder {
     @NonNull
     public PilotLogConfigBuilder setLogLevel(@NonNull PilotLogLevel level) {
         m_logLevel = level;
-        return this;
-    }
-
-    /**
-     * Set a listener for internal SDK diagnostic logs.
-     * If not set, logs go to android.util.Log.
-     */
-    @NonNull
-    public PilotLogConfigBuilder setLoggerListener(@Nullable PilotLoggerListener loggerListener) {
-        m_loggerListener = loggerListener;
         return this;
     }
 
@@ -78,13 +78,12 @@ public final class PilotLogConfigBuilder {
 
     // ── Package-private getters for SDK internals ──
 
-    PilotLogLevel getLogLevel() {
-        return m_logLevel;
+    boolean isEnabled() {
+        return m_enabled;
     }
 
-    @Nullable
-    PilotLoggerListener getLoggerListener() {
-        return m_loggerListener;
+    PilotLogLevel getLogLevel() {
+        return m_logLevel;
     }
 
     int getBatchSize() {

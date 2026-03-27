@@ -1,6 +1,7 @@
 package org.pilot.sdk;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 /**
  * Configuration for {@link Pilot} initialization.
@@ -13,6 +14,7 @@ public final class PilotConfig {
     final long pollIntervalMs;
     final long actionPollIntervalMs;
     final boolean autoConnect;
+    final PilotLoggerListener loggerListener;
     final PilotSessionListener sessionListener;
     final PilotActionListener actionListener;
     final PilotSessionAttributeBuilder sessionAttributes;
@@ -27,6 +29,7 @@ public final class PilotConfig {
         this.pollIntervalMs = builder.pollIntervalMs;
         this.actionPollIntervalMs = builder.actionPollIntervalMs;
         this.autoConnect = builder.autoConnect;
+        this.loggerListener = builder.loggerListener;
         this.sessionListener = builder.sessionListener;
         this.actionListener = builder.actionListener;
         this.sessionAttributes = builder.sessionAttributes;
@@ -62,6 +65,7 @@ public final class PilotConfig {
         private long pollIntervalMs = 10000;
         private long actionPollIntervalMs = 2000;
         private boolean autoConnect = true;
+        private PilotLoggerListener loggerListener = null;
         private PilotSessionListener sessionListener = null;
         private PilotActionListener actionListener = null;
         private PilotSessionAttributeBuilder sessionAttributes = new PilotSessionAttributeBuilder();
@@ -108,6 +112,14 @@ public final class PilotConfig {
         }
 
         /**
+         * Set a listener for internal SDK diagnostic logs.
+         */
+        public Builder setLoggerListener(@Nullable PilotLoggerListener listener) {
+            this.loggerListener = listener;
+            return this;
+        }
+
+        /**
          * Set a listener for session lifecycle events (connecting, approved, error, etc.).
          */
         public Builder setSessionListener(@Nullable PilotSessionListener listener) {
@@ -136,8 +148,8 @@ public final class PilotConfig {
          *
          * <pre>{@code
          * PilotLogConfigBuilder logConfig = new PilotLogConfigBuilder()
+         *     .setEnabled(true)
          *     .setLogLevel(PilotLogLevel.INFO)
-         *     .setLoggerListener(new MyLoggerListener())
          *     .setAttributes(new PilotLogAttributeBuilder()
          *         .putProvider("screen_name", () -> currentScreen));
          *

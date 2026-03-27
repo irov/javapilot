@@ -128,11 +128,13 @@ Pilot.log(PilotLogLevel.ERROR, "Crash detected", "crashes", "worker-3", meta);
 
 ```java
 PilotLogConfigBuilder logConfig = new PilotLogConfigBuilder()
-    .setLoggerListener((level, tag, message, throwable) -> {
-        MyLogger.log(tag + ": " + message);
-    });
+    .setEnabled(true)
+    .setLogLevel(PilotLogLevel.INFO);
 
 PilotConfig config = new PilotConfig.Builder(url, token)
+    .setLoggerListener((level, tag, message, throwable) -> {
+        MyLogger.log(tag + ": " + message);
+    })
     .setLogConfig(logConfig)
     .build();
 ```
