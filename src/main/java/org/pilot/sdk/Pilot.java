@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.17";
+    public static final String VERSION = "1.0.19";
 
     private static volatile Pilot s_instance;
 
