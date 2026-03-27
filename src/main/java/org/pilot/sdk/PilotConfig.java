@@ -1,7 +1,6 @@
 package org.pilot.sdk;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 /**
  * Configuration for {@link Pilot} initialization.
@@ -14,16 +13,11 @@ public final class PilotConfig {
     final long pollIntervalMs;
     final long heartbeatIntervalMs;
     final long actionPollIntervalMs;
-    final long logFlushIntervalMs;
-    final PilotLogLevel logLevel;
-    final PilotLogger logger;
     final boolean autoConnect;
     final PilotSessionListener sessionListener;
     final PilotActionListener actionListener;
     final PilotSessionAttributeBuilder sessionAttributes;
-    final PilotLogAttributeBuilder logAttributes;
-    final int logBatchSize;
-    final int logBufferSize;
+    final PilotLogConfigBuilder logConfig;
     final PilotMetricConfigBuilder metricConfig;
 
     private PilotConfig(Builder builder) {
@@ -34,16 +28,11 @@ public final class PilotConfig {
         this.pollIntervalMs = builder.pollIntervalMs;
         this.heartbeatIntervalMs = builder.heartbeatIntervalMs;
         this.actionPollIntervalMs = builder.actionPollIntervalMs;
-        this.logFlushIntervalMs = builder.logFlushIntervalMs;
-        this.logLevel = builder.logLevel;
-        this.logger = builder.logger;
         this.autoConnect = builder.autoConnect;
         this.sessionListener = builder.sessionListener;
         this.actionListener = builder.actionListener;
         this.sessionAttributes = builder.sessionAttributes;
-        this.logAttributes = builder.logAttributes;
-        this.logBatchSize = builder.logBatchSize;
-        this.logBufferSize = builder.logBufferSize;
+        this.logConfig = builder.logConfig;
         this.metricConfig = builder.metricConfig;
     }
 
@@ -75,16 +64,11 @@ public final class PilotConfig {
         private long pollIntervalMs = 10000;
         private long heartbeatIntervalMs = 60000;
         private long actionPollIntervalMs = 2000;
-        private long logFlushIntervalMs = 5000;
-        private PilotLogLevel logLevel = PilotLogLevel.INFO;
-        private PilotLogger logger = null;
         private boolean autoConnect = true;
         private PilotSessionListener sessionListener = null;
         private PilotActionListener actionListener = null;
         private PilotSessionAttributeBuilder sessionAttributes = new PilotSessionAttributeBuilder();
-        private PilotLogAttributeBuilder logAttributes = new PilotLogAttributeBuilder();
-        private int logBatchSize = 100;
-        private int logBufferSize = 1000;
+        private PilotLogConfigBuilder logConfig = new PilotLogConfigBuilder();
         private PilotMetricConfigBuilder metricConfig = new PilotMetricConfigBuilder();
 
         /**
@@ -118,25 +102,6 @@ public final class PilotConfig {
 
         public Builder setActionPollIntervalMs(long ms) {
             this.actionPollIntervalMs = ms;
-            return this;
-        }
-
-        public Builder setLogFlushIntervalMs(long ms) {
-            this.logFlushIntervalMs = ms;
-            return this;
-        }
-
-        public Builder setLogLevel(@NonNull PilotLogLevel level) {
-            this.logLevel = level;
-            return this;
-        }
-
-        /**
-         * Set a custom logger to redirect all SDK log output.
-         * If not set, logs go to android.util.Log.
-         */
-        public Builder setLogger(@Nullable PilotLogger logger) {
-            this.logger = logger;
             return this;
         }
 
@@ -175,21 +140,21 @@ public final class PilotConfig {
         }
 
         /**
-         * Set log attributes (static and dynamic) via a builder.
-         * Static values are fixed; dynamic providers are resolved at each log() call.
+         * Set the log configuration via a builder.
+         *
+         * <pre>{@code
+         * PilotLogConfigBuilder logConfig = new PilotLogConfigBuilder()
+         *     .setLogLevel(PilotLogLevel.INFO)
+         *     .setLogger(new MyLogger())
+         *     .setFlushIntervalMs(5000)
+         *     .setAttributes(new PilotLogAttributeBuilder()
+         *         .putProvider("screen_name", () -> currentScreen));
+         *
+         * builder.setLogConfig(logConfig);
+         * }</pre>
          */
-        public Builder setLogAttributes(@NonNull PilotLogAttributeBuilder builder) {
-            this.logAttributes = builder;
-            return this;
-        }
-
-        public Builder setLogBatchSize(int size) {
-            this.logBatchSize = size;
-            return this;
-        }
-
-        public Builder setLogBufferSize(int size) {
-            this.logBufferSize = size;
+        public Builder setLogConfig(@NonNull PilotLogConfigBuilder config) {
+            this.logConfig = config;
             return this;
         }
 

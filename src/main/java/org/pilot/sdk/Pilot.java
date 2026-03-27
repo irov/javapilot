@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.19";
+    public static final String VERSION = "1.0.20";
 
     private static volatile Pilot s_instance;
 
@@ -99,8 +99,8 @@ public final class Pilot {
     private Pilot(@NonNull PilotConfig config) {
         m_config = config;
         m_httpClient = new PilotHttpClient(config.baseUrl, config.apiToken);
-        PilotLog.setLevel(config.logLevel);
-        PilotLog.setLogger(config.logger);
+        PilotLog.setLevel(config.logConfig.getLogLevel());
+        PilotLog.setLogger(config.logConfig.getLogger());
 
         PilotMetricConfigBuilder mc = config.metricConfig;
         if (mc.isEnabled()) {
@@ -536,8 +536,8 @@ public final class Pilot {
 
         m_logFlushFuture = m_executor.scheduleAtFixedRate(
                 () -> flushLogs(sessionToken),
-                m_config.logFlushIntervalMs,
-                m_config.logFlushIntervalMs,
+                m_config.logConfig.getFlushIntervalMs(),
+                m_config.logConfig.getFlushIntervalMs(),
                 TimeUnit.MILLISECONDS
         );
 
@@ -686,11 +686,11 @@ public final class Pilot {
 
     private void bufferLog(@NonNull PilotLogEntry entry) {
         synchronized (m_logBuffer) {
-            if (m_logBuffer.size() >= m_config.logBufferSize) {
+            if (m_logBuffer.size() >= m_config.logConfig.getBufferSize()) {
                 m_logBuffer.remove(0);
 
                 if (m_logOverflowWarned.compareAndSet(false, true)) {
-                    PilotLog.w("Log buffer overflow (" + m_config.logBufferSize + "), dropping oldest entries");
+                    PilotLog.w("Log buffer overflow (" + m_config.logConfig.getBufferSize() + "), dropping oldest entries");
                 }
             }
 
@@ -703,7 +703,7 @@ public final class Pilot {
 
         List<PilotLogEntry> chunk;
         synchronized (m_logBuffer) {
-            int count = Math.min(m_logBuffer.size(), m_config.logBatchSize);
+            int count = Math.min(m_logBuffer.size(), m_config.logConfig.getBatchSize());
             chunk = new ArrayList<>(m_logBuffer.subList(0, count));
             m_logBuffer.subList(0, count).clear();
         }
@@ -720,7 +720,7 @@ public final class Pilot {
                     m_logBuffer.addAll(0, chunk);
 
                     // Trim to max buffer size
-                    while (m_logBuffer.size() > m_config.logBufferSize) {
+                    while (m_logBuffer.size() > m_config.logConfig.getBufferSize()) {
                         m_logBuffer.remove(m_logBuffer.size() - 1);
                     }
                 }
@@ -745,7 +745,7 @@ public final class Pilot {
 
     @Nullable
     private JSONObject resolveLogAttributes() {
-        PilotLogAttributeBuilder builder = m_config.logAttributes;
+        PilotLogAttributeBuilder builder = m_config.logConfig.getAttributes();
         Map<String, Object> staticAttrs = builder.getStaticAttributes();
         Map<String, PilotValueProvider> dynamicAttrs = builder.getDynamicAttributes();
 
