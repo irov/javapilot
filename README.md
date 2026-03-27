@@ -32,7 +32,7 @@ dependencyResolutionManagement {
 
 // build.gradle
 dependencies {
-    implementation 'com.github.irov:javapilot:1.0.24'
+    implementation 'com.github.irov:javapilot:1.0.25'
 }
 ```
 

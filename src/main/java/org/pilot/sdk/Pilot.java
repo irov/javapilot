@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.24";
+    public static final String VERSION = "1.0.25";
 
     private static volatile Pilot s_instance;
 
@@ -409,6 +409,69 @@ public final class Pilot {
         metadata.put("screen_name", screenName);
 
         event("change_screen", "change_screen", metadata);
+    }
+
+    /**
+     * Publish the current in-app product catalog to the dashboard.
+     */
+    public static void setInAppProducts(@NonNull List<Map<String, Object>> products) {
+        List<Map<String, Object>> normalizedProducts = new ArrayList<>(products.size());
+
+        for (Map<String, Object> product : products) {
+            normalizedProducts.add(product == null ? new LinkedHashMap<>() : new LinkedHashMap<>(product));
+        }
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("pilot_command", "set_in_app_products");
+        metadata.put("pilot_purchase_entry_type", "catalog");
+        metadata.put("in_app_products", normalizedProducts);
+        metadata.put("in_app_product_count", normalizedProducts.size());
+
+        bufferStructuredLog("purchase", "set_in_app_products", "catalog", metadata, System.currentTimeMillis());
+    }
+
+    /**
+     * Publish the current owned in-app products to the dashboard.
+     */
+    public static void setOwnedInAppProducts(@NonNull List<String> productIds) {
+        List<String> normalizedProductIds = new ArrayList<>(productIds);
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("pilot_command", "set_owned_in_app_products");
+        metadata.put("pilot_purchase_entry_type", "owned");
+        metadata.put("owned_in_app_products", normalizedProductIds);
+        metadata.put("owned_in_app_product_count", normalizedProductIds.size());
+
+        bufferStructuredLog("purchase", "set_owned_in_app_products", "owned", metadata, System.currentTimeMillis());
+    }
+
+    /**
+     * Record a completed in-app purchase event.
+     */
+    public static void purchaseInApp(@Nullable String transactionId,
+                                     @NonNull List<String> productIds,
+                                     @Nullable Map<String, Object> metadata) {
+        List<String> normalizedProductIds = new ArrayList<>(productIds);
+        Map<String, Object> purchaseMetadata = new LinkedHashMap<>();
+
+        if (metadata != null && !metadata.isEmpty()) {
+            purchaseMetadata.putAll(metadata);
+        }
+
+        purchaseMetadata.put("pilot_command", "purchase_in_app");
+        purchaseMetadata.put("pilot_purchase_entry_type", "purchase");
+        purchaseMetadata.put("in_app_products", normalizedProductIds);
+        purchaseMetadata.put("in_app_product_count", normalizedProductIds.size());
+
+        if (transactionId != null && transactionId.length() != 0) {
+            purchaseMetadata.put("transaction_id", transactionId);
+        }
+
+        String message = normalizedProductIds.isEmpty()
+            ? "purchase_in_app"
+            : normalizedProductIds.get(0);
+
+        bufferStructuredLog("purchase", message, "purchase", purchaseMetadata, System.currentTimeMillis());
     }
 
     /**
