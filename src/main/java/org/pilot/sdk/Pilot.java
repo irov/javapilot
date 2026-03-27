@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.22";
+    public static final String VERSION = "1.0.23";
 
     private static volatile Pilot s_instance;
 
@@ -713,6 +713,34 @@ public final class Pilot {
             while (m_logBuffer.size() > m_config.logConfig.getBufferSize()) {
                 m_logBuffer.remove(m_logBuffer.size() - 1);
             }
+        }
+    }
+
+    private void flushLogs(@NonNull String sessionToken) throws PilotException {
+        List<PilotLogEntry> chunk = drainLogChunk();
+        if (chunk.isEmpty()) {
+            return;
+        }
+
+        try {
+            m_httpClient.sendLogs(sessionToken, chunk);
+        } catch (PilotException e) {
+            requeueLogs(chunk);
+            throw e;
+        }
+    }
+
+    private void flushMetrics(@NonNull String sessionToken) throws PilotException {
+        List<PilotMetricEntry> chunk = m_metrics.drain();
+        if (chunk.isEmpty()) {
+            return;
+        }
+
+        try {
+            m_httpClient.sendMetrics(sessionToken, chunk);
+        } catch (PilotException e) {
+            m_metrics.requeue(chunk);
+            throw e;
         }
     }
 
