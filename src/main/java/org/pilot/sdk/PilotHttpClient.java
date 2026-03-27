@@ -187,6 +187,30 @@ final class PilotHttpClient {
         execute(request);
     }
 
+    void sendMetrics(@NonNull String sessionToken, @NonNull List<PilotMetricEntry> metrics) throws PilotException {
+        if (metrics.isEmpty()) {
+            return;
+        }
+
+        JSONArray metricsArray = new JSONArray();
+        for (PilotMetricEntry entry : metrics) {
+            metricsArray.put(entry.toJson());
+        }
+
+        JSONObject body = new JSONObject();
+        try {
+            body.put("metrics", metricsArray);
+        } catch (JSONException e) {
+            throw new PilotException("Failed to build metrics request", e);
+        }
+
+        Request request = sessionTokenRequest("/api/client/session/metrics", sessionToken)
+                .post(jsonBody(body))
+                .build();
+
+        execute(request);
+    }
+
     // ── Helpers ──
 
     private Request.Builder apiTokenRequest(@NonNull String path) {

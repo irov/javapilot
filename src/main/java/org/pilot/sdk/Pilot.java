@@ -1,5 +1,6 @@
 package org.pilot.sdk;
 
+import android.content.Context;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -87,8 +88,12 @@ public final class Pilot {
     private ScheduledExecutorService m_executor;
     private ScheduledFuture<?> m_actionPollFuture;
     private ScheduledFuture<?> m_logFlushFuture;
+    private ScheduledFuture<?> m_metricSampleFuture;
+    private ScheduledFuture<?> m_metricFlushFuture;
 
     private final PilotUI m_ui = new PilotUI();
+    private final PilotMetrics m_metrics = new PilotMetrics();
+    private final PilotFpsTracker m_fpsTracker = new PilotFpsTracker();
     private final Handler m_mainHandler = new Handler(Looper.getMainLooper());
 
     private Pilot(@NonNull PilotConfig config) {
@@ -96,6 +101,13 @@ public final class Pilot {
         m_httpClient = new PilotHttpClient(config.baseUrl, config.apiToken);
         PilotLog.setLevel(config.logLevel);
         PilotLog.setLogger(config.logger);
+
+        PilotMetricConfigBuilder mc = config.metricConfig;
+        if (mc.isEnabled()) {
+            m_metrics.setSampleIntervalMs(mc.getSampleIntervalMs());
+            m_metrics.setBufferSize(mc.getBufferSize());
+            m_metrics.setBatchSize(mc.getBatchSize());
+        }
     }
 
     // ══════════════════════════════════════════════════════
@@ -105,8 +117,20 @@ public final class Pilot {
     /**
      * Initialize the Pilot SDK. Must be called before any other method.
      * Safe to call multiple times — subsequent calls are ignored.
+     *
+     * <p>Use {@link #initialize(PilotConfig, Context)} to enable battery metrics.</p>
      */
     public static void initialize(@NonNull PilotConfig config) {
+        initialize(config, null);
+    }
+
+    /**
+     * Initialize the Pilot SDK with Android Context for battery metrics.
+     *
+     * @param config SDK configuration
+     * @param context Android Context (used for battery level/charging metrics). Can be null.
+     */
+    public static void initialize(@NonNull PilotConfig config, @Nullable Context context) {
         if (s_instance != null) {
             PilotLog.w("Pilot.initialize() called more than once, ignoring");
             return;
@@ -123,6 +147,16 @@ public final class Pilot {
                 }
                 if (config.actionListener != null) {
                     p.m_actionListeners.add(config.actionListener);
+                }
+
+                // Register built-in metric collector and user collectors
+                PilotMetricConfigBuilder mc = config.metricConfig;
+                if (mc.isEnabled()) {
+                    p.m_metrics.addCollector(new PilotDefaultMetricCollector(p.m_fpsTracker, context));
+                    for (PilotMetricCollector collector : mc.getCollectors()) {
+                        p.m_metrics.addCollector(collector);
+                    }
+                    PilotLog.i("Built-in metrics enabled (sample interval: %dms)", mc.getSampleIntervalMs());
                 }
 
                 if (config.autoConnect) {
@@ -196,6 +230,16 @@ public final class Pilot {
     @NonNull
     public static PilotUI getUI() {
         return requireInstance().m_ui;
+    }
+
+    /**
+     * Get the metrics subsystem. Use to add collectors or record metrics manually.
+     *
+     * @return The shared PilotMetrics instance
+     */
+    @NonNull
+    public static PilotMetrics getMetrics() {
+        return requireInstance().m_metrics;
     }
 
     /**
@@ -336,6 +380,7 @@ public final class Pilot {
             return;
         }
 
+        m_fpsTracker.stop();
         cancelScheduledTasks();
 
         String token = m_sessionToken.getAndSet(null);
@@ -343,6 +388,7 @@ public final class Pilot {
             m_executor.execute(() -> {
                 try {
                     flushLogs(token);
+                    flushMetrics(token);
                     m_httpClient.closeSession(token);
                 } catch (PilotException ignored) {
                 }
@@ -358,11 +404,13 @@ public final class Pilot {
 
     private void doShutdown() {
         PilotLog.i("Shutting down Pilot SDK");
+        m_fpsTracker.stop();
         stopConnection();
         m_httpClient.shutdown();
         m_actionListeners.clear();
         m_sessionListeners.clear();
         m_logBuffer.clear();
+        m_metrics.clear();
     }
 
     private void connectAndWaitApproval() {
@@ -492,6 +540,27 @@ public final class Pilot {
                 m_config.logFlushIntervalMs,
                 TimeUnit.MILLISECONDS
         );
+
+        // Start metric sampling and flushing
+        if (m_config.metricConfig.isEnabled()) {
+            m_fpsTracker.start();
+
+            long sampleMs = m_metrics.getSampleIntervalMs();
+            m_metricSampleFuture = m_executor.scheduleAtFixedRate(
+                    () -> m_metrics.sample(),
+                    sampleMs,
+                    sampleMs,
+                    TimeUnit.MILLISECONDS
+            );
+
+            long flushMs = m_config.metricConfig.getFlushIntervalMs();
+            m_metricFlushFuture = m_executor.scheduleAtFixedRate(
+                    () -> flushMetrics(sessionToken),
+                    flushMs,
+                    flushMs,
+                    TimeUnit.MILLISECONDS
+            );
+        }
     }
 
     private void onRejected() {
@@ -659,6 +728,21 @@ public final class Pilot {
         }
     }
 
+    private void flushMetrics(@NonNull String sessionToken) {
+        List<PilotMetricEntry> chunk = m_metrics.drain();
+        if (chunk.isEmpty()) return;
+
+        try {
+            m_httpClient.sendMetrics(sessionToken, chunk);
+        } catch (PilotException e) {
+            PilotLog.e("Failed to flush metrics", e);
+
+            if (e.isNetworkError() || e.getHttpCode() >= 500) {
+                m_metrics.requeue(chunk);
+            }
+        }
+    }
+
     @Nullable
     private JSONObject resolveLogAttributes() {
         PilotLogAttributeBuilder builder = m_config.logAttributes;
@@ -758,6 +842,14 @@ public final class Pilot {
         if (m_logFlushFuture != null) {
             m_logFlushFuture.cancel(false);
             m_logFlushFuture = null;
+        }
+        if (m_metricSampleFuture != null) {
+            m_metricSampleFuture.cancel(false);
+            m_metricSampleFuture = null;
+        }
+        if (m_metricFlushFuture != null) {
+            m_metricFlushFuture.cancel(false);
+            m_metricFlushFuture = null;
         }
     }
 

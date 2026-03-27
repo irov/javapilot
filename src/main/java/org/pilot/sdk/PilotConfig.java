@@ -24,6 +24,7 @@ public final class PilotConfig {
     final PilotLogAttributeBuilder logAttributes;
     final int logBatchSize;
     final int logBufferSize;
+    final PilotMetricConfigBuilder metricConfig;
 
     private PilotConfig(Builder builder) {
         this.baseUrl = builder.baseUrl;
@@ -43,6 +44,7 @@ public final class PilotConfig {
         this.logAttributes = builder.logAttributes;
         this.logBatchSize = builder.logBatchSize;
         this.logBufferSize = builder.logBufferSize;
+        this.metricConfig = builder.metricConfig;
     }
 
     @NonNull
@@ -83,6 +85,7 @@ public final class PilotConfig {
         private PilotLogAttributeBuilder logAttributes = new PilotLogAttributeBuilder();
         private int logBatchSize = 100;
         private int logBufferSize = 1000;
+        private PilotMetricConfigBuilder metricConfig = new PilotMetricConfigBuilder();
 
         /**
          * @param baseUrl  Pilot server URL, e.g. "https://pilot.example.com"
@@ -187,6 +190,26 @@ public final class PilotConfig {
 
         public Builder setLogBufferSize(int size) {
             this.logBufferSize = size;
+            return this;
+        }
+
+        /**
+         * Set the metric configuration via a builder.
+         *
+         * <pre>{@code
+         * PilotMetricConfigBuilder metricConfig = new PilotMetricConfigBuilder()
+         *     .setEnabled(true)
+         *     .setSampleIntervalMs(200)
+         *     .setFlushIntervalMs(5000)
+         *     .addCollector(out -> {
+         *         out.add(new PilotMetricEntry(PilotMetricType.DRAW_CALLS, renderer.getDrawCalls()));
+         *     });
+         *
+         * builder.setMetricConfig(metricConfig);
+         * }</pre>
+         */
+        public Builder setMetricConfig(@NonNull PilotMetricConfigBuilder config) {
+            this.metricConfig = config;
             return this;
         }
 
