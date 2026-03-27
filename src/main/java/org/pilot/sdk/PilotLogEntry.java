@@ -31,6 +31,12 @@ public final class PilotLogEntry {
     private final JSONObject m_attributes;
     private final String m_clientTimestamp;
 
+    private static String formatTimestamp(long timestampMs) {
+        synchronized (ISO_FORMAT) {
+            return ISO_FORMAT.format(new Date(timestampMs));
+        }
+    }
+
     public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message, @Nullable Map<String, Object> metadata) {
         this(level, message, null, null, metadata, null);
     }
@@ -44,16 +50,14 @@ public final class PilotLogEntry {
     public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message,
                          @Nullable String category, @Nullable String thread,
                          @Nullable Map<String, Object> metadata, @Nullable JSONObject attributes) {
-        m_level = level.getValue();
-        m_message = message;
-        m_category = category;
-        m_thread = thread;
-        m_metadata = metadata;
-        m_attributes = attributes;
+        this(level.getValue(), message, category, thread, metadata, attributes, System.currentTimeMillis());
+    }
 
-        synchronized (ISO_FORMAT) {
-            m_clientTimestamp = ISO_FORMAT.format(new Date());
-        }
+    public PilotLogEntry(@NonNull PilotLogLevel level, @NonNull String message,
+                         @Nullable String category, @Nullable String thread,
+                         @Nullable Map<String, Object> metadata, @Nullable JSONObject attributes,
+                         long clientTimestampMs) {
+        this(level.getValue(), message, category, thread, metadata, attributes, clientTimestampMs);
     }
 
     public PilotLogEntry(@NonNull String level, @NonNull String message, @Nullable Map<String, Object> metadata) {
@@ -69,16 +73,20 @@ public final class PilotLogEntry {
     public PilotLogEntry(@NonNull String level, @NonNull String message,
                          @Nullable String category, @Nullable String thread,
                          @Nullable Map<String, Object> metadata, @Nullable JSONObject attributes) {
+        this(level, message, category, thread, metadata, attributes, System.currentTimeMillis());
+    }
+
+    public PilotLogEntry(@NonNull String level, @NonNull String message,
+                         @Nullable String category, @Nullable String thread,
+                         @Nullable Map<String, Object> metadata, @Nullable JSONObject attributes,
+                         long clientTimestampMs) {
         m_level = level;
         m_message = message;
         m_category = category;
         m_thread = thread;
-        m_attributes = attributes;
         m_metadata = metadata;
-
-        synchronized (ISO_FORMAT) {
-            m_clientTimestamp = ISO_FORMAT.format(new Date());
-        }
+        m_attributes = attributes;
+        m_clientTimestamp = formatTimestamp(clientTimestampMs);
     }
 
     public static PilotLogEntry debug(@NonNull String message) {

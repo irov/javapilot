@@ -22,7 +22,7 @@ public interface PilotSessionListener {
     /** Connection request was rejected by a dashboard user. */
     default void onPilotSessionRejected() {}
 
-    /** Authentication failed (HTTP 401). The API token is invalid or expired. */
+    /** Authentication failed (HTTP 401). The API token is invalid or expired. No retry attempts will be made. */
     default void onPilotSessionAuthFailed() {}
 
     /** An error occurred. The session may still be running (transient errors). */

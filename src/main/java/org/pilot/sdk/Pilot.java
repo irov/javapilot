@@ -13,6 +13,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -66,7 +67,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.23";
+    public static final String VERSION = "1.0.24";
 
     private static volatile Pilot s_instance;
 
@@ -313,6 +314,104 @@ public final class Pilot {
     }
 
     /**
+     * Send a structured event entry.
+     */
+    public static void event(@NonNull String message) {
+        event(message, null, null, System.currentTimeMillis());
+    }
+
+    /**
+     * Send a structured event entry with metadata.
+     */
+    public static void event(@NonNull String message, @Nullable Map<String, Object> metadata) {
+        event(message, null, metadata, System.currentTimeMillis());
+    }
+
+    /**
+     * Send a structured event entry with metadata and an explicit client timestamp.
+     */
+    public static void event(@NonNull String message,
+                             @Nullable Map<String, Object> metadata,
+                             long clientTimestampMs) {
+        event(message, null, metadata, clientTimestampMs);
+    }
+
+    /**
+     * Send a structured event entry with an optional subtype.
+     */
+    public static void event(@NonNull String message,
+                             @Nullable String category,
+                             @Nullable Map<String, Object> metadata) {
+        event(message, category, metadata, System.currentTimeMillis());
+    }
+
+    /**
+     * Send a structured event entry with an explicit client timestamp.
+     */
+    public static void event(@NonNull String message,
+                             @Nullable String category,
+                             @Nullable Map<String, Object> metadata,
+                             long clientTimestampMs) {
+        bufferStructuredLog("event", message, category, metadata, clientTimestampMs);
+    }
+
+    /**
+     * Send a structured revenue entry.
+     */
+    public static void revenue(@NonNull String message) {
+        revenue(message, null, null, System.currentTimeMillis());
+    }
+
+    /**
+     * Send a structured revenue entry with metadata.
+     */
+    public static void revenue(@NonNull String message, @Nullable Map<String, Object> metadata) {
+        revenue(message, null, metadata, System.currentTimeMillis());
+    }
+
+    /**
+     * Send a structured revenue entry with metadata and an explicit client timestamp.
+     */
+    public static void revenue(@NonNull String message,
+                               @Nullable Map<String, Object> metadata,
+                               long clientTimestampMs) {
+        revenue(message, null, metadata, clientTimestampMs);
+    }
+
+    /**
+     * Send a structured revenue entry with an optional subtype.
+     */
+    public static void revenue(@NonNull String message,
+                               @Nullable String category,
+                               @Nullable Map<String, Object> metadata) {
+        revenue(message, category, metadata, System.currentTimeMillis());
+    }
+
+    /**
+     * Send a structured revenue entry with an explicit client timestamp.
+     */
+    public static void revenue(@NonNull String message,
+                               @Nullable String category,
+                               @Nullable Map<String, Object> metadata,
+                               long clientTimestampMs) {
+        bufferStructuredLog("revenue", message, category, metadata, clientTimestampMs);
+    }
+
+    /**
+     * Record a scene/screen change marker that can be used by the dashboard as a timeline slice.
+     */
+    public static void changeScreen(@NonNull String screenType, @NonNull String screenName) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("pilot_command", "change_screen");
+        metadata.put("pilot_slice_type", "screen");
+        metadata.put("pilot_slice_name", screenName);
+        metadata.put("screen_type", screenType);
+        metadata.put("screen_name", screenName);
+
+        event("change_screen", "change_screen", metadata);
+    }
+
+    /**
      * Acknowledge an action from the dashboard.
      *
      * @param actionId   ID of the action to acknowledge
@@ -334,6 +433,55 @@ public final class Pilot {
                 PilotLog.e("Failed to acknowledge action", e);
             }
         });
+    }
+
+    private static void bufferStructuredLog(@NonNull String kind,
+                                            @NonNull String message,
+                                            @Nullable String category,
+                                            @Nullable Map<String, Object> metadata,
+                                            long clientTimestampMs) {
+        Pilot p = s_instance;
+        if (p == null || !p.m_config.logConfig.isEnabled()) {
+            return;
+        }
+
+        String resolvedCategory = resolveStructuredCategory(kind, category);
+        Map<String, Object> resolvedMetadata = mergeStructuredMetadata(kind, metadata);
+
+        p.bufferLog(new PilotLogEntry(
+            PilotLogLevel.INFO,
+            message,
+            resolvedCategory,
+            null,
+            resolvedMetadata,
+            p.resolveLogAttributes(),
+            clientTimestampMs
+        ));
+    }
+
+    @NonNull
+    private static String resolveStructuredCategory(@NonNull String kind, @Nullable String category) {
+        if (category == null || category.length() == 0) {
+            return kind;
+        }
+
+        if (category.equals(kind) || category.startsWith(kind + "_")) {
+            return category;
+        }
+
+        return kind + "_" + category;
+    }
+
+    @NonNull
+    private static Map<String, Object> mergeStructuredMetadata(@NonNull String kind,
+                                                               @Nullable Map<String, Object> metadata) {
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (metadata != null && !metadata.isEmpty()) {
+            merged.putAll(metadata);
+        }
+
+        merged.put("pilot_kind", kind);
+        return merged;
     }
 
     /**
@@ -423,10 +571,9 @@ public final class Pilot {
             } catch (PilotException e) {
                 if (e.isUnauthorized()) {
                     PilotLog.e("Authentication failed", e);
-                    setStatus(PilotSessionStatus.ERROR);
+                    setStatus(PilotSessionStatus.AUTH_FAILED);
                     m_running.set(false);
                     notifyAuthFailed();
-                    notifyError(e);
                     return;
                 }
 

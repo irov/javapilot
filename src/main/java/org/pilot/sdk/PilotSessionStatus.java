@@ -5,6 +5,7 @@ public enum PilotSessionStatus {
     CONNECTING,
     WAITING_APPROVAL,
     ACTIVE,
+    AUTH_FAILED,
     REJECTED,
     CLOSED,
     ERROR
