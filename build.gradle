@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'org.pilot'
-version = '1.0.26'
+version = '1.0.27'
 
 android {
     namespace "org.pilot.sdk"
