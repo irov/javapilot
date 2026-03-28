@@ -81,7 +81,7 @@ public final class PilotLogEntry {
                          @Nullable Map<String, Object> metadata, @Nullable JSONObject attributes,
                          long clientTimestampMs) {
         m_level = level;
-        m_message = message;
+        m_message = message != null ? message : "";
         m_category = category;
         m_thread = thread;
         m_metadata = metadata;

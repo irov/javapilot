@@ -944,10 +944,15 @@ public final class Pilot {
                 String sessionToken = m_sessionToken.get();
                 if (sessionToken == null) {
                     ackPayload = buildInternalAck(false, "No active session available for streaming");
+                    acknowledgeAction(action.getId(), ackPayload);
                 } else {
-                    ackPayload = m_liveManager.start(sessionToken, action.getPayload());
+                    final String actionId = action.getId();
+                    final JSONObject payload = action.getPayload();
+                    m_executor.execute(() -> {
+                        JSONObject result = m_liveManager.start(sessionToken, payload);
+                        acknowledgeAction(actionId, result);
+                    });
                 }
-                acknowledgeAction(action.getId(), ackPayload);
                 return true;
 
             case LIVE_STOP:
