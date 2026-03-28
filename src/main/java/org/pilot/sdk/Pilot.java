@@ -891,11 +891,13 @@ public final class Pilot {
                 PilotLog.e("Widget callback threw exception", ex);
             }
 
-            for (PilotActionListener listener : m_actionListeners) {
-                try {
-                    listener.onPilotActionReceived(action);
-                } catch (Exception ex) {
-                    PilotLog.e("Action listener threw exception", ex);
+            if (!handled) {
+                for (PilotActionListener listener : m_actionListeners) {
+                    try {
+                        listener.onPilotActionReceived(action);
+                    } catch (Exception ex) {
+                        PilotLog.e("Action listener threw exception", ex);
+                    }
                 }
             }
         });
