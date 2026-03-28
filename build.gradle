@@ -1,10 +1,11 @@
 plugins {
     id 'com.android.library' version '8.5.2'
+    id 'org.jetbrains.kotlin.android' version '1.9.24'
     id 'maven-publish'
 }
 
 group = 'org.pilot'
-version = '1.0.25'
+version = '1.0.26'
 
 android {
     namespace "org.pilot.sdk"
@@ -22,6 +23,10 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -33,6 +38,8 @@ android {
 dependencies {
     api 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'androidx.annotation:annotation:1.7.1'
+    implementation 'io.livekit:livekit-android:2.24.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
 }
 
 android.publishing {

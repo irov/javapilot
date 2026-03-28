@@ -78,6 +78,7 @@ public final class Pilot {
     private final AtomicReference<String> m_requestId = new AtomicReference<>(null);
     private final AtomicReference<PilotSessionStatus> m_status = new AtomicReference<>(PilotSessionStatus.DISCONNECTED);
     private final AtomicBoolean m_running = new AtomicBoolean(false);
+    private final AtomicBoolean m_actionPollInFlight = new AtomicBoolean(false);
 
     private final List<PilotLogEntry> m_logBuffer = Collections.synchronizedList(new ArrayList<>());
     private final AtomicBoolean m_logOverflowWarned = new AtomicBoolean(false);
@@ -93,11 +94,15 @@ public final class Pilot {
     private final PilotUI m_ui = new PilotUI();
     private final PilotMetrics m_metrics = new PilotMetrics();
     private final PilotFpsTracker m_fpsTracker = new PilotFpsTracker();
+    private final PilotStreamManager m_streamManager;
     private final Handler m_mainHandler = new Handler(Looper.getMainLooper());
+    private volatile long m_currentActionPollIntervalMs;
 
-    private Pilot(@NonNull PilotConfig config) {
+    private Pilot(@NonNull PilotConfig config, @Nullable Context context) {
         m_config = config;
         m_httpClient = new PilotHttpClient(config.baseUrl, config.apiToken);
+        m_streamManager = new PilotStreamManager(context, m_httpClient, this::updateStreamMode);
+        m_currentActionPollIntervalMs = config.actionPollIntervalMs;
         PilotLog.setLevel(config.logConfig.getLogLevel());
         PilotLog.setLoggerListener(config.loggerListener);
 
@@ -117,17 +122,19 @@ public final class Pilot {
      * Initialize the Pilot SDK. Must be called before any other method.
      * Safe to call multiple times — subsequent calls are ignored.
      *
-     * <p>Use {@link #initialize(PilotConfig, Context)} to enable battery metrics.</p>
+     * <p>Use {@link #initialize(PilotConfig, Context)} to enable battery metrics and app stream capture.</p>
      */
     public static void initialize(@NonNull PilotConfig config) {
         initialize(config, null);
     }
 
     /**
-     * Initialize the Pilot SDK with Android Context for battery metrics.
+     * Initialize the Pilot SDK with Android Context for battery metrics and app stream support.
      *
      * @param config SDK configuration
-     * @param context Android Context (used for battery level/charging metrics). Can be null.
+     * @param context Android Context. When available, the SDK uses it for battery metrics and
+     *                resolves Application lifecycle callbacks required for app stream capture and
+     *                touch overlay support. Can be null.
      */
     public static void initialize(@NonNull PilotConfig config, @Nullable Context context) {
         if (s_instance != null) {
@@ -137,7 +144,7 @@ public final class Pilot {
 
         synchronized (Pilot.class) {
             if (s_instance == null) {
-                Pilot p = new Pilot(config);
+                Pilot p = new Pilot(config, context);
                 s_instance = p;
                 PilotLog.i("Pilot SDK initialized (server: %s)", config.baseUrl);
 
@@ -589,6 +596,7 @@ public final class Pilot {
             return;
         }
 
+        m_streamManager.onSessionClosed();
         m_fpsTracker.stop();
         cancelScheduledTasks();
 
@@ -615,6 +623,7 @@ public final class Pilot {
         PilotLog.i("Shutting down Pilot SDK");
         m_fpsTracker.stop();
         stopConnection();
+        m_streamManager.shutdown();
         m_httpClient.shutdown();
         m_actionListeners.clear();
         m_sessionListeners.clear();
@@ -735,12 +744,7 @@ public final class Pilot {
         }
 
         // Start background tasks
-        m_actionPollFuture = m_executor.scheduleAtFixedRate(
-                () -> doPollActions(sessionToken),
-                0,
-                m_config.actionPollIntervalMs,
-                TimeUnit.MILLISECONDS
-        );
+        scheduleActionPolling(sessionToken, m_config.actionPollIntervalMs);
 
         // Start metric sampling
         if (m_config.metricConfig.isEnabled()) {
@@ -764,52 +768,58 @@ public final class Pilot {
     }
 
     private void doPollActions(@NonNull String sessionToken) {
-        if (!m_running.get()) return;
-
-        Map<String, Object> changedAttrs = resolveChangedSessionAttributes();
-        List<PilotLogEntry> logChunk = drainLogChunk();
-        List<PilotMetricEntry> metricChunk = m_metrics.drain();
-
-        // Poll value providers + snapshot UI on Main Thread
-        JSONObject uiSnapshot = snapshotUIOnMainThread();
-
-        // Send UI if snapshot was produced (means there were unsent changes)
-        if (uiSnapshot != null) {
-            try {
-                m_httpClient.submitPanel(sessionToken, uiSnapshot);
-                m_ui.markSent();
-                PilotLog.d("UI submitted (revision=%d)", m_ui.getRevision());
-            } catch (PilotException e) {
-                PilotLog.e("Failed to submit UI", e);
-                notifyError(e);
-            }
+        if (!m_running.get() || !m_actionPollInFlight.compareAndSet(false, true)) {
+            return;
         }
 
         try {
-            JSONObject json = m_httpClient.pollActions(sessionToken, changedAttrs, logChunk, metricChunk);
-            JSONArray actionsArr = json.optJSONArray("actions");
-            if (actionsArr != null && actionsArr.length() > 0) {
-                for (int i = 0; i < actionsArr.length(); i++) {
-                    JSONObject actionJson = actionsArr.optJSONObject(i);
-                    if (actionJson != null) {
-                        PilotAction action = PilotAction.fromJson(actionJson);
-                        dispatchActionOnMainThread(action);
-                    }
+            Map<String, Object> changedAttrs = resolveChangedSessionAttributes();
+            List<PilotLogEntry> logChunk = drainLogChunk();
+            List<PilotMetricEntry> metricChunk = m_metrics.drain();
+
+            // Poll value providers + snapshot UI on Main Thread
+            JSONObject uiSnapshot = snapshotUIOnMainThread();
+
+            // Send UI if snapshot was produced (means there were unsent changes)
+            if (uiSnapshot != null) {
+                try {
+                    m_httpClient.submitPanel(sessionToken, uiSnapshot);
+                    m_ui.markSent();
+                    PilotLog.d("UI submitted (revision=%d)", m_ui.getRevision());
+                } catch (PilotException e) {
+                    PilotLog.e("Failed to submit UI", e);
+                    notifyError(e);
                 }
             }
 
-            if (!logChunk.isEmpty()) {
-                m_logOverflowWarned.set(false);
-            }
-        } catch (PilotException e) {
-            requeueLogs(logChunk);
-            m_metrics.requeue(metricChunk);
+            try {
+                JSONObject json = m_httpClient.pollActions(sessionToken, changedAttrs, logChunk, metricChunk);
+                JSONArray actionsArr = json.optJSONArray("actions");
+                if (actionsArr != null && actionsArr.length() > 0) {
+                    for (int i = 0; i < actionsArr.length(); i++) {
+                        JSONObject actionJson = actionsArr.optJSONObject(i);
+                        if (actionJson != null) {
+                            PilotAction action = PilotAction.fromJson(actionJson);
+                            dispatchActionOnMainThread(action);
+                        }
+                    }
+                }
 
-            if (e.isSessionGone()) {
-                handleSessionGone();
-            } else {
-                PilotLog.e("Action poll failed", e);
+                if (!logChunk.isEmpty()) {
+                    m_logOverflowWarned.set(false);
+                }
+            } catch (PilotException e) {
+                requeueLogs(logChunk);
+                m_metrics.requeue(metricChunk);
+
+                if (e.isSessionGone()) {
+                    handleSessionGone();
+                } else {
+                    PilotLog.e("Action poll failed", e);
+                }
             }
+        } finally {
+            m_actionPollInFlight.set(false);
         }
     }
 
@@ -870,8 +880,13 @@ public final class Pilot {
      */
     private void dispatchActionOnMainThread(@NonNull PilotAction action) {
         m_mainHandler.post(() -> {
+            boolean handled = false;
+
             try {
-                m_ui.dispatchAction(action);
+                handled = handleInternalAction(action);
+                if (!handled) {
+                    m_ui.dispatchAction(action);
+                }
             } catch (Exception ex) {
                 PilotLog.e("Widget callback threw exception", ex);
             }
@@ -884,6 +899,83 @@ public final class Pilot {
                 }
             }
         });
+    }
+
+    private void scheduleActionPolling(@NonNull String sessionToken, long intervalMs) {
+        if (m_executor == null || m_executor.isShutdown() || !m_running.get()) {
+            return;
+        }
+
+        if (m_actionPollFuture != null) {
+            m_actionPollFuture.cancel(false);
+            m_actionPollFuture = null;
+        }
+
+        m_currentActionPollIntervalMs = intervalMs;
+        m_actionPollFuture = m_executor.scheduleAtFixedRate(
+                () -> doPollActions(sessionToken),
+                0,
+                intervalMs,
+                TimeUnit.MILLISECONDS
+        );
+    }
+
+    private void updateStreamMode(boolean enabled, long requestedPollIntervalMs) {
+        String sessionToken = m_sessionToken.get();
+        if (sessionToken == null || m_executor == null || m_executor.isShutdown()) {
+            return;
+        }
+
+        long targetIntervalMs = enabled
+                ? Math.max(200L, Math.min(requestedPollIntervalMs > 0 ? requestedPollIntervalMs : 500L, m_config.actionPollIntervalMs))
+                : m_config.actionPollIntervalMs;
+
+        if (targetIntervalMs == m_currentActionPollIntervalMs) {
+            return;
+        }
+
+        m_executor.execute(() -> scheduleActionPolling(sessionToken, targetIntervalMs));
+    }
+
+    private boolean handleInternalAction(@NonNull PilotAction action) {
+        JSONObject ackPayload;
+        switch (action.getActionType()) {
+            case STREAM_START:
+                String sessionToken = m_sessionToken.get();
+                if (sessionToken == null) {
+                    ackPayload = buildInternalAck(false, "No active session available for streaming");
+                } else {
+                    ackPayload = m_streamManager.start(sessionToken, action.getPayload());
+                }
+                acknowledgeAction(action.getId(), ackPayload);
+                return true;
+
+            case STREAM_STOP:
+                acknowledgeAction(action.getId(), m_streamManager.stop());
+                return true;
+
+            case STREAM_TAP:
+                acknowledgeAction(action.getId(), m_streamManager.tap(action.getPayload()));
+                return true;
+
+            case STREAM_LONG_PRESS:
+                acknowledgeAction(action.getId(), m_streamManager.longPress(action.getPayload()));
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    @NonNull
+    private static JSONObject buildInternalAck(boolean ok, @NonNull String status) {
+        JSONObject ackPayload = new JSONObject();
+        try {
+            ackPayload.put("ok", ok);
+            ackPayload.put("status", status);
+        } catch (Exception ignored) {
+        }
+        return ackPayload;
     }
 
     private void bufferLog(@NonNull PilotLogEntry entry) {
@@ -1036,6 +1128,7 @@ public final class Pilot {
         PilotLog.w("Session is gone (410), stopping");
         m_running.set(false);
         m_sessionToken.set(null);
+        m_streamManager.onSessionClosed();
         cancelScheduledTasks();
         setStatus(PilotSessionStatus.CLOSED);
         notifySessionClosed();

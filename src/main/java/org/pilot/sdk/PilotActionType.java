@@ -6,6 +6,10 @@ public enum PilotActionType {
     CLICK("click"),
     CHANGE("change"),
     TOGGLE("toggle"),
+    STREAM_START("stream_start"),
+    STREAM_STOP("stream_stop"),
+    STREAM_TAP("stream_tap"),
+    STREAM_LONG_PRESS("stream_long_press"),
     UNKNOWN("");
 
     private final String m_value;
