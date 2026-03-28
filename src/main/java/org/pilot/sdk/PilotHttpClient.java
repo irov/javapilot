@@ -206,8 +206,8 @@ final class PilotHttpClient {
         execute(request);
     }
 
-    JSONObject getStreamPublisherState(@NonNull String sessionToken) throws PilotException {
-        Request request = sessionTokenRequest("/api/client/session/stream/publisher", sessionToken)
+    JSONObject getLivePublisherState(@NonNull String sessionToken) throws PilotException {
+        Request request = sessionTokenRequest("/api/client/session/live/publisher", sessionToken)
                 .get()
                 .build();
 

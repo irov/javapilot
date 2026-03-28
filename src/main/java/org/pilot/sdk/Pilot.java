@@ -94,14 +94,14 @@ public final class Pilot {
     private final PilotUI m_ui = new PilotUI();
     private final PilotMetrics m_metrics = new PilotMetrics();
     private final PilotFpsTracker m_fpsTracker = new PilotFpsTracker();
-    private final PilotStreamManager m_streamManager;
+    private final PilotLiveManager m_liveManager;
     private final Handler m_mainHandler = new Handler(Looper.getMainLooper());
     private volatile long m_currentActionPollIntervalMs;
 
     private Pilot(@NonNull PilotConfig config, @Nullable Context context) {
         m_config = config;
         m_httpClient = new PilotHttpClient(config.baseUrl, config.apiToken);
-        m_streamManager = new PilotStreamManager(context, m_httpClient, this::updateStreamMode);
+        m_liveManager = new PilotLiveManager(context, m_httpClient, this::updateLiveMode);
         m_currentActionPollIntervalMs = config.actionPollIntervalMs;
         PilotLog.setLevel(config.logConfig.getLogLevel());
         PilotLog.setLoggerListener(config.loggerListener);
@@ -596,7 +596,7 @@ public final class Pilot {
             return;
         }
 
-        m_streamManager.onSessionClosed();
+        m_liveManager.onSessionClosed();
         m_fpsTracker.stop();
         cancelScheduledTasks();
 
@@ -623,7 +623,7 @@ public final class Pilot {
         PilotLog.i("Shutting down Pilot SDK");
         m_fpsTracker.stop();
         stopConnection();
-        m_streamManager.shutdown();
+        m_liveManager.shutdown();
         m_httpClient.shutdown();
         m_actionListeners.clear();
         m_sessionListeners.clear();
@@ -920,7 +920,7 @@ public final class Pilot {
         );
     }
 
-    private void updateStreamMode(boolean enabled, long requestedPollIntervalMs) {
+    private void updateLiveMode(boolean enabled, long requestedPollIntervalMs) {
         String sessionToken = m_sessionToken.get();
         if (sessionToken == null || m_executor == null || m_executor.isShutdown()) {
             return;
@@ -940,26 +940,26 @@ public final class Pilot {
     private boolean handleInternalAction(@NonNull PilotAction action) {
         JSONObject ackPayload;
         switch (action.getActionType()) {
-            case STREAM_START:
+            case LIVE_START:
                 String sessionToken = m_sessionToken.get();
                 if (sessionToken == null) {
                     ackPayload = buildInternalAck(false, "No active session available for streaming");
                 } else {
-                    ackPayload = m_streamManager.start(sessionToken, action.getPayload());
+                    ackPayload = m_liveManager.start(sessionToken, action.getPayload());
                 }
                 acknowledgeAction(action.getId(), ackPayload);
                 return true;
 
-            case STREAM_STOP:
-                acknowledgeAction(action.getId(), m_streamManager.stop());
+            case LIVE_STOP:
+                acknowledgeAction(action.getId(), m_liveManager.stop());
                 return true;
 
-            case STREAM_TAP:
-                acknowledgeAction(action.getId(), m_streamManager.tap(action.getPayload()));
+            case LIVE_TAP:
+                acknowledgeAction(action.getId(), m_liveManager.tap(action.getPayload()));
                 return true;
 
-            case STREAM_LONG_PRESS:
-                acknowledgeAction(action.getId(), m_streamManager.longPress(action.getPayload()));
+            case LIVE_LONG_PRESS:
+                acknowledgeAction(action.getId(), m_liveManager.longPress(action.getPayload()));
                 return true;
 
             default:
@@ -1128,7 +1128,7 @@ public final class Pilot {
         PilotLog.w("Session is gone (410), stopping");
         m_running.set(false);
         m_sessionToken.set(null);
-        m_streamManager.onSessionClosed();
+        m_liveManager.onSessionClosed();
         cancelScheduledTasks();
         setStatus(PilotSessionStatus.CLOSED);
         notifySessionClosed();

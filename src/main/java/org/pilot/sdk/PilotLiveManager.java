@@ -31,16 +31,16 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-final class PilotStreamManager {
+final class PilotLiveManager {
     interface Callback {
-        void onStreamModeChanged(boolean enabled, long actionPollIntervalMs);
+        void onLiveModeChanged(boolean enabled, long actionPollIntervalMs);
     }
 
     private final Handler m_mainHandler = new Handler(Looper.getMainLooper());
     private final ScheduledExecutorService m_executor = Executors.newSingleThreadScheduledExecutor();
     private final PilotHttpClient m_httpClient;
     private final Callback m_callback;
-    private final AtomicBoolean m_streaming = new AtomicBoolean(false);
+    private final AtomicBoolean m_isLive = new AtomicBoolean(false);
     private final AtomicBoolean m_captureInFlight = new AtomicBoolean(false);
 
     @Nullable
@@ -53,12 +53,12 @@ final class PilotStreamManager {
     private final Object m_stateLock = new Object();
 
     private volatile WeakReference<Activity> m_currentActivity = new WeakReference<>(null);
-    private volatile WeakReference<PilotStreamOverlayView> m_overlayView = new WeakReference<>(null);
-    private volatile StreamSettings m_settings = StreamSettings.low();
+    private volatile WeakReference<PilotLiveOverlayView> m_overlayView = new WeakReference<>(null);
+    private volatile LiveSettings m_settings = LiveSettings.low();
     @Nullable
     private volatile ScheduledFuture<?> m_captureFuture;
 
-    PilotStreamManager(@Nullable Context context,
+    PilotLiveManager(@Nullable Context context,
                        @NonNull PilotHttpClient httpClient,
                        @NonNull Callback callback) {
         m_httpClient = httpClient;
@@ -102,7 +102,7 @@ final class PilotStreamManager {
 
                 @Override
                 public void onActivityDestroyed(@NonNull Activity activity) {
-                    PilotStreamOverlayView overlayView = m_overlayView.get();
+                    PilotLiveOverlayView overlayView = m_overlayView.get();
                     if (overlayView != null && overlayView.getContext() == activity) {
                         removeOverlay(overlayView);
                         m_overlayView = new WeakReference<>(null);
@@ -125,18 +125,18 @@ final class PilotStreamManager {
     @NonNull
     JSONObject start(@NonNull String sessionToken, @Nullable JSONObject payload) {
         if (m_application == null || m_liveKitPublisher == null) {
-            return buildAck(false, "Stream requires Pilot.initialize(config, applicationContext)");
+            return buildAck(false, "Live requires Pilot.initialize(config, applicationContext)");
         }
 
-        boolean wasStreaming = m_streaming.get();
-        stopStreamingRuntime();
-        if (wasStreaming) {
-            m_callback.onStreamModeChanged(false, 0L);
+        boolean wasLive = m_isLive.get();
+        stopLiveRuntime();
+        if (wasLive) {
+            m_callback.onLiveModeChanged(false, 0L);
         }
 
         try {
-            PublisherSession publisherSession = fetchPublisherSession(sessionToken, StreamSettings.fromPayload(payload));
-            StreamSettings settings = publisherSession.m_settings;
+            PublisherSession publisherSession = fetchPublisherSession(sessionToken, LiveSettings.fromPayload(payload));
+            LiveSettings settings = publisherSession.m_settings;
 
             m_liveKitPublisher.start(
                     publisherSession.m_serverUrl,
@@ -147,9 +147,9 @@ final class PilotStreamManager {
             );
 
             m_settings = settings;
-            m_streaming.set(true);
+            m_isLive.set(true);
             scheduleCaptureLoop(settings);
-            m_callback.onStreamModeChanged(true, settings.m_actionPollIntervalMs);
+            m_callback.onLiveModeChanged(true, settings.m_actionPollIntervalMs);
 
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("preset", settings.m_presetName);
@@ -162,9 +162,9 @@ final class PilotStreamManager {
                 metadata.put("participant_identity", publisherSession.m_participantIdentity);
             }
             metadata.put("video_track_name", publisherSession.m_videoTrackName);
-            Pilot.event("stream_started", "stream", metadata);
+            Pilot.event("live_started", "live", metadata);
 
-            JSONObject ack = buildAck(true, "stream_started");
+            JSONObject ack = buildAck(true, "live_started");
             try {
                 ack.put("preset", settings.m_presetName);
                 ack.put("max_dimension", settings.m_maxDimension);
@@ -176,40 +176,40 @@ final class PilotStreamManager {
             }
             return ack;
         } catch (PilotException e) {
-            stopStreamingRuntime();
-            PilotLog.e("Failed to start LiveKit stream", e);
+            stopLiveRuntime();
+            PilotLog.e("Failed to start LiveKit live", e);
 
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("message", e.getMessage());
             metadata.put("http_code", e.getHttpCode());
-            Pilot.event("stream_start_failed", "stream", metadata);
-            return buildAck(false, e.getMessage() != null ? e.getMessage() : "Failed to start stream");
+            Pilot.event("live_start_failed", "live", metadata);
+            return buildAck(false, e.getMessage() != null ? e.getMessage() : "Failed to start live");
         } catch (Exception e) {
-            stopStreamingRuntime();
-            PilotLog.e("Failed to start LiveKit stream", e);
+            stopLiveRuntime();
+            PilotLog.e("Failed to start LiveKit live", e);
 
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("message", e.getMessage());
-            Pilot.event("stream_start_failed", "stream", metadata);
-            return buildAck(false, e.getMessage() != null ? e.getMessage() : "Failed to start stream");
+            Pilot.event("live_start_failed", "live", metadata);
+            return buildAck(false, e.getMessage() != null ? e.getMessage() : "Failed to start live");
         }
     }
 
     @NonNull
     JSONObject stop() {
-        boolean wasStreaming = m_streaming.get();
-        stopStreamingRuntime();
-        m_callback.onStreamModeChanged(false, 0L);
+        boolean wasLive = m_isLive.get();
+        stopLiveRuntime();
+        m_callback.onLiveModeChanged(false, 0L);
 
-        if (wasStreaming) {
-            Pilot.event("stream_stopped", "stream", null);
+        if (wasLive) {
+            Pilot.event("live_stopped", "live", null);
         }
 
-        return buildAck(true, wasStreaming ? "stream_stopped" : "stream_already_stopped");
+        return buildAck(true, wasLive ? "live_stopped" : "live_already_stopped");
     }
 
     void onSessionClosed() {
-        stopStreamingRuntime();
+        stopLiveRuntime();
     }
 
     void shutdown() {
@@ -224,8 +224,8 @@ final class PilotStreamManager {
 
     @NonNull
     JSONObject tap(@Nullable JSONObject payload) {
-        if (!m_streaming.get()) {
-            return buildAck(false, "Stream is not active");
+        if (!m_isLive.get()) {
+            return buildAck(false, "Live is not active");
         }
 
         Activity activity = getCurrentActivity();
@@ -248,15 +248,15 @@ final class PilotStreamManager {
         metadata.put("normalized_y", point.m_normalizedY);
         metadata.put("x", point.m_x);
         metadata.put("y", point.m_y);
-        Pilot.event("stream_tap", "stream_input", metadata);
+        Pilot.event("live_tap", "live_input", metadata);
 
         return buildAck(true, "tap_sent");
     }
 
     @NonNull
     JSONObject longPress(@Nullable JSONObject payload) {
-        if (!m_streaming.get()) {
-            return buildAck(false, "Stream is not active");
+        if (!m_isLive.get()) {
+            return buildAck(false, "Live is not active");
         }
 
         Activity activity = getCurrentActivity();
@@ -285,7 +285,7 @@ final class PilotStreamManager {
         metadata.put("x", point.m_x);
         metadata.put("y", point.m_y);
         metadata.put("duration_ms", durationMs);
-        Pilot.event("stream_long_press", "stream_input", metadata);
+        Pilot.event("live_long_press", "live_input", metadata);
 
         JSONObject ack = buildAck(true, "long_press_sent");
         try {
@@ -295,7 +295,7 @@ final class PilotStreamManager {
         return ack;
     }
 
-    private void scheduleCaptureLoop(@NonNull StreamSettings settings) {
+    private void scheduleCaptureLoop(@NonNull LiveSettings settings) {
         synchronized (m_stateLock) {
             cancelCaptureLoop();
             long periodMs = Math.max(1000L / settings.m_framesPerSecond, 200L);
@@ -313,7 +313,7 @@ final class PilotStreamManager {
     }
 
     private void captureAndPublishFrame() {
-        if (!m_streaming.get()) {
+        if (!m_isLive.get()) {
             return;
         }
 
@@ -329,7 +329,7 @@ final class PilotStreamManager {
 
             publishCapturedFrame(frame);
         } catch (Exception e) {
-            PilotLog.e("Failed to capture stream frame", e);
+            PilotLog.e("Failed to capture live frame", e);
         } finally {
             m_captureInFlight.set(false);
         }
@@ -371,7 +371,7 @@ final class PilotStreamManager {
             return null;
         }
 
-        StreamSettings settings = m_settings;
+        LiveSettings settings = m_settings;
         int longestSide = Math.max(sourceWidth, sourceHeight);
         float scale = longestSide > settings.m_maxDimension
                 ? (float) settings.m_maxDimension / (float) longestSide
@@ -395,7 +395,7 @@ final class PilotStreamManager {
     }
 
     private void publishCapturedFrame(@NonNull CapturedFrame frame) {
-        if (!m_streaming.get() || m_liveKitPublisher == null) {
+        if (!m_isLive.get() || m_liveKitPublisher == null) {
             frame.recycle();
             return;
         }
@@ -403,8 +403,8 @@ final class PilotStreamManager {
         m_liveKitPublisher.pushBitmap(frame.m_bitmap);
     }
 
-    private void stopStreamingRuntime() {
-        m_streaming.set(false);
+    private void stopLiveRuntime() {
+        m_isLive.set(false);
         cancelCaptureLoop();
         clearOverlay();
         if (m_liveKitPublisher != null) {
@@ -414,8 +414,8 @@ final class PilotStreamManager {
 
     @NonNull
     private PublisherSession fetchPublisherSession(@NonNull String sessionToken,
-                                                   @NonNull StreamSettings requestedSettings) throws PilotException {
-        JSONObject response = m_httpClient.getStreamPublisherState(sessionToken);
+                                                   @NonNull LiveSettings requestedSettings) throws PilotException {
+        JSONObject response = m_httpClient.getLivePublisherState(sessionToken);
         String statusMessage = trimToNull(response.optString("status_message", null));
 
         if (!response.optBoolean("configured", false)) {
@@ -423,14 +423,14 @@ final class PilotStreamManager {
         }
 
         if (!response.optBoolean("requested", false)) {
-            throw new PilotException(statusMessage != null ? statusMessage : "Stream request is no longer active");
+            throw new PilotException(statusMessage != null ? statusMessage : "Live request is no longer active");
         }
 
         String serverUrl = trimToNull(response.optString("server_url", null));
         String participantToken = trimToNull(response.optString("participant_token", null));
         String videoTrackName = trimToNull(response.optString("video_track_name", null));
         if (serverUrl == null || participantToken == null || videoTrackName == null) {
-            throw new PilotException("Server returned incomplete stream credentials");
+            throw new PilotException("Server returned incomplete live credentials");
         }
 
         String presetName = trimToNull(response.optString("preset", requestedSettings.m_presetName));
@@ -452,7 +452,7 @@ final class PilotStreamManager {
                 trimToNull(response.optString("room_name", null)),
                 trimToNull(response.optString("participant_identity", null)),
                 videoTrackName,
-                new StreamSettings(presetName, maxDimension, fps, actionPollIntervalMs)
+                new LiveSettings(presetName, maxDimension, fps, actionPollIntervalMs)
         );
     }
 
@@ -492,23 +492,23 @@ final class PilotStreamManager {
     }
 
     private void showTapOverlay(@NonNull Activity activity, @NonNull TouchPoint point) {
-        PilotStreamOverlayView overlayView = attachOverlay(activity);
+        PilotLiveOverlayView overlayView = attachOverlay(activity);
         overlayView.showTap(point.m_x, point.m_y);
     }
 
     private void showPressOverlay(@NonNull Activity activity, @NonNull TouchPoint point) {
-        PilotStreamOverlayView overlayView = attachOverlay(activity);
+        PilotLiveOverlayView overlayView = attachOverlay(activity);
         overlayView.showPress(point.m_x, point.m_y);
     }
 
     private void showReleaseOverlay(@NonNull Activity activity, @NonNull TouchPoint point) {
-        PilotStreamOverlayView overlayView = attachOverlay(activity);
+        PilotLiveOverlayView overlayView = attachOverlay(activity);
         overlayView.showRelease(point.m_x, point.m_y);
     }
 
     private void clearOverlay() {
         m_mainHandler.post(() -> {
-            PilotStreamOverlayView overlayView = m_overlayView.get();
+            PilotLiveOverlayView overlayView = m_overlayView.get();
             if (overlayView != null) {
                 overlayView.clearIndicator();
             }
@@ -516,8 +516,8 @@ final class PilotStreamManager {
     }
 
     @NonNull
-    private PilotStreamOverlayView attachOverlay(@NonNull Activity activity) {
-        PilotStreamOverlayView overlayView = m_overlayView.get();
+    private PilotLiveOverlayView attachOverlay(@NonNull Activity activity) {
+        PilotLiveOverlayView overlayView = m_overlayView.get();
         ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
         if (overlayView != null && overlayView.getParent() == decorView) {
             return overlayView;
@@ -527,7 +527,7 @@ final class PilotStreamManager {
             removeOverlay(overlayView);
         }
 
-        overlayView = new PilotStreamOverlayView(activity);
+        overlayView = new PilotLiveOverlayView(activity);
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -537,7 +537,7 @@ final class PilotStreamManager {
         return overlayView;
     }
 
-    private void removeOverlay(@NonNull PilotStreamOverlayView overlayView) {
+    private void removeOverlay(@NonNull PilotLiveOverlayView overlayView) {
         View parent = (View) overlayView.getParent();
         if (parent instanceof ViewGroup) {
             ((ViewGroup) parent).removeView(overlayView);
@@ -595,13 +595,13 @@ final class PilotStreamManager {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private static final class StreamSettings {
+    private static final class LiveSettings {
         private final String m_presetName;
         private final int m_maxDimension;
         private final int m_framesPerSecond;
         private final long m_actionPollIntervalMs;
 
-        private StreamSettings(@NonNull String presetName,
+        private LiveSettings(@NonNull String presetName,
                                int maxDimension,
                                int framesPerSecond,
                                long actionPollIntervalMs) {
@@ -612,23 +612,23 @@ final class PilotStreamManager {
         }
 
         @NonNull
-        static StreamSettings low() {
-            return new StreamSettings("low", 540, 2, 500L);
+        static LiveSettings low() {
+            return new LiveSettings("low", 540, 2, 500L);
         }
 
         @NonNull
-        static StreamSettings balanced() {
-            return new StreamSettings("balanced", 720, 3, 400L);
+        static LiveSettings balanced() {
+            return new LiveSettings("balanced", 720, 3, 400L);
         }
 
         @NonNull
-        static StreamSettings high() {
-            return new StreamSettings("high", 1080, 4, 300L);
+        static LiveSettings high() {
+            return new LiveSettings("high", 1080, 4, 300L);
         }
 
         @NonNull
-        static StreamSettings fromPayload(@Nullable JSONObject payload) {
-            StreamSettings base = low();
+        static LiveSettings fromPayload(@Nullable JSONObject payload) {
+            LiveSettings base = low();
             if (payload == null) {
                 return base;
             }
@@ -650,7 +650,7 @@ final class PilotStreamManager {
                     2000L
             );
 
-            return new StreamSettings(preset, maxDimension, fps, actionPollIntervalMs);
+            return new LiveSettings(preset, maxDimension, fps, actionPollIntervalMs);
         }
     }
 
@@ -688,14 +688,14 @@ final class PilotStreamManager {
         @Nullable
         private final String m_participantIdentity;
         private final String m_videoTrackName;
-        private final StreamSettings m_settings;
+        private final LiveSettings m_settings;
 
         private PublisherSession(@NonNull String serverUrl,
                                  @NonNull String participantToken,
                                  @Nullable String roomName,
                                  @Nullable String participantIdentity,
                                  @NonNull String videoTrackName,
-                                 @NonNull StreamSettings settings) {
+                                 @NonNull LiveSettings settings) {
             m_serverUrl = serverUrl;
             m_participantToken = participantToken;
             m_roomName = roomName;

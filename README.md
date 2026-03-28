@@ -10,7 +10,7 @@ Lightweight Android SDK for connecting apps to **Pilot** — a real-time remote 
 - **Widgets** — buttons, switches, stats, labels, inputs, selects, tables, logs, textareas
 - **Value providers** — widgets auto-update via callbacks, dirty-checked on poll cycle
 - **Remote actions** — trigger commands from dashboard with per-widget callbacks
-- **App screen stream** — on-demand LiveKit video stream with remote tap/long-press control and in-app touch overlay
+- **App screen live** — on-demand LiveKit video live with remote tap/long-press control and in-app touch overlay
 - **Log streaming** — structured logs with levels, categories, threads, per-entry attributes and metadata
 - **Session attributes** — static and dynamic key-value pairs attached to the session, native types preserved (boolean, int, float, null)
 - **Log attributes** — static and dynamic key-value pairs attached to every log entry
@@ -98,7 +98,7 @@ root.addLabel("label-status", "Idle")
 Pilot.connect();
 ```
 
-If you want to use the dashboard Stream tab, initialize Pilot with an Application or a Context that resolves to an Application via getApplicationContext(). Stream capture stays off by default and starts only after Stream is enabled from the web dashboard.
+If you want to use the dashboard Live tab, initialize Pilot with an Application or a Context that resolves to an Application via getApplicationContext(). Live capture stays off by default and starts only after Stream is enabled from the web dashboard.
 
 To enable the media pipeline, the backend must be configured with LiveKit credentials via `PLT_LIVEKIT_URL`, `PLT_LIVEKIT_API_KEY`, and `PLT_LIVEKIT_API_SECRET`.
 
@@ -109,12 +109,12 @@ To enable the media pipeline, the backend must be configured with LiveKit creden
 - Dynamic session attributes are piggybacked on action polling, so there is no separate active-session heartbeat loop.
 - You can still override timings with `setPollIntervalMs(...)` and `setActionPollIntervalMs(...)` if needed.
 
-## App stream
+## App live
 
-- Stream capture is limited to the current app Activity, not the whole device screen.
-- Video is published into LiveKit only while the dashboard requests streaming; normal session traffic does not carry the media stream.
+- Live capture is limited to the current app Activity, not the whole device screen.
+- Video is published into LiveKit only while the dashboard requests live; normal session traffic does not carry the media feed.
 - The dashboard can request different max-dimension / FPS presets, with low quality used by default.
-- While stream mode is active, the dashboard can send tap and long-press actions and the SDK draws a top-level touch indicator inside the app.
+- While live mode is active, the dashboard can send tap and long-press actions and the SDK draws a top-level touch indicator inside the app.
 
 ## Logging
 

@@ -11,7 +11,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-final class PilotStreamOverlayView extends View {
+final class PilotLiveOverlayView extends View {
     private static final long TAP_RELEASE_MS = 90L;
     private static final long TAP_HIDE_MS = 420L;
     private static final long RELEASE_HIDE_MS = 260L;
@@ -35,12 +35,12 @@ final class PilotStreamOverlayView extends View {
         invalidate();
     };
 
-    PilotStreamOverlayView(@NonNull Context context) {
+    PilotLiveOverlayView(@NonNull Context context) {
         super(context);
         init();
     }
 
-    PilotStreamOverlayView(@NonNull Context context, @Nullable AttributeSet attrs) {
+    PilotLiveOverlayView(@NonNull Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
         init();
     }
