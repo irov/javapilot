@@ -66,24 +66,28 @@ final class PilotLiveManager {
 
                 @Override
                 public void onActivityStarted(@NonNull Activity activity) {
+                    if (activity instanceof PilotScreenCaptureActivity) return;
+                    m_currentActivity = new WeakReference<>(activity);
+                    attachOverlay(activity);
                 }
 
                 @Override
                 public void onActivityResumed(@NonNull Activity activity) {
+                    if (activity instanceof PilotScreenCaptureActivity) return;
                     m_currentActivity = new WeakReference<>(activity);
                     attachOverlay(activity);
                 }
 
                 @Override
                 public void onActivityPaused(@NonNull Activity activity) {
-                    Activity current = m_currentActivity.get();
-                    if (current == activity) {
-                        m_currentActivity = new WeakReference<>(null);
-                    }
                 }
 
                 @Override
                 public void onActivityStopped(@NonNull Activity activity) {
+                    Activity current = m_currentActivity.get();
+                    if (current == activity) {
+                        m_currentActivity = new WeakReference<>(null);
+                    }
                 }
 
                 @Override
