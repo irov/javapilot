@@ -5,12 +5,16 @@ import android.app.Application;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Rect;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.MotionEvent;
+import android.view.PixelCopy;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -42,6 +46,8 @@ final class PilotLiveManager {
     private final Callback m_callback;
     private final AtomicBoolean m_isLive = new AtomicBoolean(false);
     private final AtomicBoolean m_captureInFlight = new AtomicBoolean(false);
+    private final HandlerThread m_pixelCopyThread;
+    private final Handler m_pixelCopyHandler;
 
     @Nullable
     private final Application m_application;
@@ -63,6 +69,10 @@ final class PilotLiveManager {
                        @NonNull Callback callback) {
         m_httpClient = httpClient;
         m_callback = callback;
+
+        m_pixelCopyThread = new HandlerThread("PilotPixelCopy");
+        m_pixelCopyThread.start();
+        m_pixelCopyHandler = new Handler(m_pixelCopyThread.getLooper());
 
         Application application = resolveApplication(context);
         m_application = application;
@@ -337,32 +347,10 @@ final class PilotLiveManager {
 
     @Nullable
     private CapturedFrame captureCurrentFrameOnMainThread() {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            return captureCurrentFrame();
-        }
-
-        FutureTask<CapturedFrame> task = new FutureTask<>(this::captureCurrentFrame);
-        m_mainHandler.post(task);
-
-        try {
-            return task.get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return null;
-        } catch (ExecutionException e) {
-            PilotLog.e("Failed to capture frame on main thread", e);
-            return null;
-        }
-    }
-
-    @Nullable
-    private CapturedFrame captureCurrentFrame() {
         Activity activity = getCurrentActivity();
         if (activity == null) {
             return null;
         }
-
-        attachOverlay(activity);
 
         View rootView = activity.getWindow().getDecorView();
         int sourceWidth = rootView.getWidth();
@@ -380,18 +368,94 @@ final class PilotLiveManager {
         int targetWidth = Math.max(1, Math.round(sourceWidth * scale));
         int targetHeight = Math.max(1, Math.round(sourceHeight * scale));
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return captureWithPixelCopy(activity, sourceWidth, sourceHeight, targetWidth, targetHeight);
+        } else {
+            return captureWithViewDraw(activity, sourceWidth, sourceHeight, targetWidth, targetHeight);
+        }
+    }
+
+    @Nullable
+    private CapturedFrame captureWithPixelCopy(@NonNull Activity activity,
+                                                int sourceWidth, int sourceHeight,
+                                                int targetWidth, int targetHeight) {
+        Bitmap bitmap = Bitmap.createBitmap(sourceWidth, sourceHeight, Bitmap.Config.ARGB_8888);
+
+        final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        final int[] resultHolder = new int[]{PixelCopy.ERROR_UNKNOWN};
+
+        try {
+            PixelCopy.request(
+                    activity.getWindow(),
+                    new Rect(0, 0, sourceWidth, sourceHeight),
+                    bitmap,
+                    result -> {
+                        resultHolder[0] = result;
+                        latch.countDown();
+                    },
+                    m_pixelCopyHandler
+            );
+        } catch (IllegalArgumentException e) {
+            PilotLog.e("PixelCopy request failed", e);
+            bitmap.recycle();
+            return captureWithViewDraw(activity, sourceWidth, sourceHeight, targetWidth, targetHeight);
+        }
+
+        try {
+            if (!latch.await(500, TimeUnit.MILLISECONDS)) {
+                PilotLog.w("PixelCopy timed out, falling back to View.draw");
+                bitmap.recycle();
+                return captureWithViewDraw(activity, sourceWidth, sourceHeight, targetWidth, targetHeight);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            bitmap.recycle();
+            return null;
+        }
+
+        if (resultHolder[0] != PixelCopy.SUCCESS) {
+            PilotLog.w("PixelCopy failed with code %d, falling back to View.draw", resultHolder[0]);
+            bitmap.recycle();
+            return captureWithViewDraw(activity, sourceWidth, sourceHeight, targetWidth, targetHeight);
+        }
+
+        if (targetWidth != sourceWidth || targetHeight != sourceHeight) {
+            Bitmap scaled = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true);
+            bitmap.recycle();
+            bitmap = scaled;
+        }
+
+        return new CapturedFrame(bitmap, targetWidth, targetHeight, sourceWidth, sourceHeight);
+    }
+
+    @Nullable
+    private CapturedFrame captureWithViewDraw(@NonNull Activity activity,
+                                               int sourceWidth, int sourceHeight,
+                                               int targetWidth, int targetHeight) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            FutureTask<CapturedFrame> task = new FutureTask<>(() ->
+                    captureWithViewDraw(activity, sourceWidth, sourceHeight, targetWidth, targetHeight));
+            m_mainHandler.post(task);
+            try {
+                return task.get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            } catch (ExecutionException e) {
+                PilotLog.e("Failed to capture frame on main thread", e);
+                return null;
+            }
+        }
+
+        attachOverlay(activity);
+
+        View rootView = activity.getWindow().getDecorView();
         Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         canvas.scale((float) targetWidth / (float) sourceWidth, (float) targetHeight / (float) sourceHeight);
         rootView.draw(canvas);
 
-        return new CapturedFrame(
-                bitmap,
-                targetWidth,
-                targetHeight,
-                sourceWidth,
-                sourceHeight
-        );
+        return new CapturedFrame(bitmap, targetWidth, targetHeight, sourceWidth, sourceHeight);
     }
 
     private void publishCapturedFrame(@NonNull CapturedFrame frame) {
