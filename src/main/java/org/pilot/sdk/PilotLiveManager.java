@@ -3,18 +3,13 @@ package org.pilot.sdk;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Rect;
-import android.os.Build;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.MotionEvent;
-import android.view.PixelCopy;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -27,12 +22,8 @@ import org.json.JSONObject;
 import java.lang.ref.WeakReference;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 final class PilotLiveManager {
@@ -45,9 +36,6 @@ final class PilotLiveManager {
     private final PilotHttpClient m_httpClient;
     private final Callback m_callback;
     private final AtomicBoolean m_isLive = new AtomicBoolean(false);
-    private final AtomicBoolean m_captureInFlight = new AtomicBoolean(false);
-    private final HandlerThread m_pixelCopyThread;
-    private final Handler m_pixelCopyHandler;
 
     @Nullable
     private final Application m_application;
@@ -56,23 +44,15 @@ final class PilotLiveManager {
     @Nullable
     private final PilotLiveKitPublisher m_liveKitPublisher;
 
-    private final Object m_stateLock = new Object();
-
     private volatile WeakReference<Activity> m_currentActivity = new WeakReference<>(null);
     private volatile WeakReference<PilotLiveOverlayView> m_overlayView = new WeakReference<>(null);
     private volatile LiveSettings m_settings = LiveSettings.low();
-    @Nullable
-    private volatile ScheduledFuture<?> m_captureFuture;
 
     PilotLiveManager(@Nullable Context context,
                        @NonNull PilotHttpClient httpClient,
                        @NonNull Callback callback) {
         m_httpClient = httpClient;
         m_callback = callback;
-
-        m_pixelCopyThread = new HandlerThread("PilotPixelCopy");
-        m_pixelCopyThread.start();
-        m_pixelCopyHandler = new Handler(m_pixelCopyThread.getLooper());
 
         Application application = resolveApplication(context);
         m_application = application;
@@ -150,15 +130,12 @@ final class PilotLiveManager {
 
             m_liveKitPublisher.start(
                     publisherSession.m_serverUrl,
-                    publisherSession.m_participantToken,
-                    publisherSession.m_videoTrackName,
-                    settings.m_maxDimension,
-                    settings.m_framesPerSecond
+                    publisherSession.m_participantToken
             );
 
             m_settings = settings;
             m_isLive.set(true);
-            scheduleCaptureLoop(settings);
+            requestScreenCapturePermission();
             m_callback.onLiveModeChanged(true, settings.m_actionPollIntervalMs);
 
             Map<String, Object> metadata = new LinkedHashMap<>();
@@ -305,171 +282,43 @@ final class PilotLiveManager {
         return ack;
     }
 
-    private void scheduleCaptureLoop(@NonNull LiveSettings settings) {
-        synchronized (m_stateLock) {
-            cancelCaptureLoop();
-            long periodMs = Math.max(1000L / settings.m_framesPerSecond, 200L);
-            m_captureFuture = m_executor.scheduleWithFixedDelay(this::captureAndPublishFrame, 0L, periodMs, TimeUnit.MILLISECONDS);
-        }
-    }
-
-    private void cancelCaptureLoop() {
-        synchronized (m_stateLock) {
-            if (m_captureFuture != null) {
-                m_captureFuture.cancel(false);
-                m_captureFuture = null;
+    private void requestScreenCapturePermission() {
+        PilotScreenCaptureActivity.s_callback = (resultCode, data) -> {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                m_executor.execute(() -> {
+                    if (!m_isLive.get() || m_liveKitPublisher == null) {
+                        return;
+                    }
+                    try {
+                        m_liveKitPublisher.enableScreenShare(data);
+                        Pilot.event("screen_share_enabled", "live", null);
+                    } catch (Exception e) {
+                        PilotLog.e("Failed to enable screen share", e);
+                        stop();
+                    }
+                });
+            } else {
+                PilotLog.w("Screen capture permission denied");
+                m_executor.execute(this::stop);
             }
-        }
-    }
+        };
 
-    private void captureAndPublishFrame() {
-        if (!m_isLive.get()) {
-            return;
-        }
-
-        if (!m_captureInFlight.compareAndSet(false, true)) {
-            return;
-        }
-
-        try {
-            CapturedFrame frame = captureCurrentFrameOnMainThread();
-            if (frame == null) {
-                return;
-            }
-
-            publishCapturedFrame(frame);
-        } catch (Exception e) {
-            PilotLog.e("Failed to capture live frame", e);
-        } finally {
-            m_captureInFlight.set(false);
-        }
-    }
-
-    @Nullable
-    private CapturedFrame captureCurrentFrameOnMainThread() {
         Activity activity = getCurrentActivity();
-        if (activity == null) {
-            return null;
-        }
-
-        View rootView = activity.getWindow().getDecorView();
-        int sourceWidth = rootView.getWidth();
-        int sourceHeight = rootView.getHeight();
-        if (sourceWidth <= 0 || sourceHeight <= 0) {
-            return null;
-        }
-
-        LiveSettings settings = m_settings;
-        int longestSide = Math.max(sourceWidth, sourceHeight);
-        float scale = longestSide > settings.m_maxDimension
-                ? (float) settings.m_maxDimension / (float) longestSide
-                : 1f;
-
-        int targetWidth = Math.max(1, Math.round(sourceWidth * scale));
-        int targetHeight = Math.max(1, Math.round(sourceHeight * scale));
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            return captureWithPixelCopy(activity, sourceWidth, sourceHeight, targetWidth, targetHeight);
+        if (activity != null) {
+            activity.startActivity(new Intent(activity, PilotScreenCaptureActivity.class));
+        } else if (m_application != null) {
+            Intent intent = new Intent(m_application, PilotScreenCaptureActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            m_application.startActivity(intent);
         } else {
-            return captureWithViewDraw(activity, sourceWidth, sourceHeight, targetWidth, targetHeight);
+            PilotLog.e("No context available to request screen capture permission");
+            m_executor.execute(this::stop);
         }
-    }
-
-    @Nullable
-    private CapturedFrame captureWithPixelCopy(@NonNull Activity activity,
-                                                int sourceWidth, int sourceHeight,
-                                                int targetWidth, int targetHeight) {
-        Bitmap bitmap = Bitmap.createBitmap(sourceWidth, sourceHeight, Bitmap.Config.ARGB_8888);
-
-        final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-        final int[] resultHolder = new int[]{PixelCopy.ERROR_UNKNOWN};
-
-        try {
-            PixelCopy.request(
-                    activity.getWindow(),
-                    new Rect(0, 0, sourceWidth, sourceHeight),
-                    bitmap,
-                    result -> {
-                        resultHolder[0] = result;
-                        latch.countDown();
-                    },
-                    m_pixelCopyHandler
-            );
-        } catch (IllegalArgumentException e) {
-            PilotLog.e("PixelCopy request failed", e);
-            bitmap.recycle();
-            return captureWithViewDraw(activity, sourceWidth, sourceHeight, targetWidth, targetHeight);
-        }
-
-        try {
-            if (!latch.await(500, TimeUnit.MILLISECONDS)) {
-                PilotLog.w("PixelCopy timed out, falling back to View.draw");
-                bitmap.recycle();
-                return captureWithViewDraw(activity, sourceWidth, sourceHeight, targetWidth, targetHeight);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            bitmap.recycle();
-            return null;
-        }
-
-        if (resultHolder[0] != PixelCopy.SUCCESS) {
-            PilotLog.w("PixelCopy failed with code %d, falling back to View.draw", resultHolder[0]);
-            bitmap.recycle();
-            return captureWithViewDraw(activity, sourceWidth, sourceHeight, targetWidth, targetHeight);
-        }
-
-        if (targetWidth != sourceWidth || targetHeight != sourceHeight) {
-            Bitmap scaled = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true);
-            bitmap.recycle();
-            bitmap = scaled;
-        }
-
-        return new CapturedFrame(bitmap, targetWidth, targetHeight, sourceWidth, sourceHeight);
-    }
-
-    @Nullable
-    private CapturedFrame captureWithViewDraw(@NonNull Activity activity,
-                                               int sourceWidth, int sourceHeight,
-                                               int targetWidth, int targetHeight) {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            FutureTask<CapturedFrame> task = new FutureTask<>(() ->
-                    captureWithViewDraw(activity, sourceWidth, sourceHeight, targetWidth, targetHeight));
-            m_mainHandler.post(task);
-            try {
-                return task.get();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return null;
-            } catch (ExecutionException e) {
-                PilotLog.e("Failed to capture frame on main thread", e);
-                return null;
-            }
-        }
-
-        attachOverlay(activity);
-
-        View rootView = activity.getWindow().getDecorView();
-        Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        canvas.scale((float) targetWidth / (float) sourceWidth, (float) targetHeight / (float) sourceHeight);
-        rootView.draw(canvas);
-
-        return new CapturedFrame(bitmap, targetWidth, targetHeight, sourceWidth, sourceHeight);
-    }
-
-    private void publishCapturedFrame(@NonNull CapturedFrame frame) {
-        if (!m_isLive.get() || m_liveKitPublisher == null) {
-            frame.recycle();
-            return;
-        }
-
-        m_liveKitPublisher.pushBitmap(frame.m_bitmap);
     }
 
     private void stopLiveRuntime() {
         m_isLive.set(false);
-        cancelCaptureLoop();
+        PilotScreenCaptureActivity.s_callback = null;
         clearOverlay();
         if (m_liveKitPublisher != null) {
             m_liveKitPublisher.stop();
@@ -715,32 +564,6 @@ final class PilotLiveManager {
             );
 
             return new LiveSettings(preset, maxDimension, fps, actionPollIntervalMs);
-        }
-    }
-
-    private static final class CapturedFrame {
-        private final Bitmap m_bitmap;
-        private final int m_width;
-        private final int m_height;
-        private final int m_sourceWidth;
-        private final int m_sourceHeight;
-
-        private CapturedFrame(@NonNull Bitmap bitmap,
-                              int width,
-                              int height,
-                              int sourceWidth,
-                              int sourceHeight) {
-            m_bitmap = bitmap;
-            m_width = width;
-            m_height = height;
-            m_sourceWidth = sourceWidth;
-            m_sourceHeight = sourceHeight;
-        }
-
-        private void recycle() {
-            if (!m_bitmap.isRecycled()) {
-                m_bitmap.recycle();
-            }
         }
     }
 
