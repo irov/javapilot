@@ -134,7 +134,10 @@ final class PilotLiveManager {
 
             m_liveKitPublisher.start(
                     publisherSession.m_serverUrl,
-                    publisherSession.m_participantToken
+                publisherSession.m_participantToken,
+                settings.m_presetName,
+                settings.m_maxDimension,
+                settings.m_framesPerSecond
             );
 
             m_settings = settings;
@@ -183,6 +186,71 @@ final class PilotLiveManager {
             metadata.put("message", e.getMessage());
             Pilot.event("live_start_failed", "live", metadata);
             return buildAck(false, e.getMessage() != null ? e.getMessage() : "Failed to start live");
+        }
+    }
+
+    @NonNull
+    JSONObject update(@NonNull String sessionToken, @Nullable JSONObject payload) {
+        if (!m_isLive.get()) {
+            return buildAck(false, "Live is not active");
+        }
+
+        if (m_liveKitPublisher == null) {
+            return buildAck(false, "LiveKit publisher is not available");
+        }
+
+        try {
+            PublisherSession publisherSession = fetchPublisherSession(sessionToken, LiveSettings.fromPayload(payload));
+            LiveSettings settings = publisherSession.m_settings;
+            boolean screenShareActive = m_liveKitPublisher.updateQuality(
+                    settings.m_presetName,
+                    settings.m_maxDimension,
+                    settings.m_framesPerSecond
+            );
+
+            m_settings = settings;
+            m_callback.onLiveModeChanged(true, settings.m_actionPollIntervalMs);
+
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("preset", settings.m_presetName);
+            metadata.put("max_dimension", settings.m_maxDimension);
+            metadata.put("fps", settings.m_framesPerSecond);
+            metadata.put("screen_share_active", screenShareActive);
+            if (publisherSession.m_roomName != null) {
+                metadata.put("room_name", publisherSession.m_roomName);
+            }
+            if (publisherSession.m_participantIdentity != null) {
+                metadata.put("participant_identity", publisherSession.m_participantIdentity);
+            }
+            metadata.put("video_track_name", publisherSession.m_videoTrackName);
+            Pilot.event("live_updated", "live", metadata);
+
+            JSONObject ack = buildAck(true, screenShareActive ? "live_updated" : "live_updated_pending_capture");
+            try {
+                ack.put("preset", settings.m_presetName);
+                ack.put("max_dimension", settings.m_maxDimension);
+                ack.put("fps", settings.m_framesPerSecond);
+                ack.put("room_name", publisherSession.m_roomName);
+                ack.put("video_track_name", publisherSession.m_videoTrackName);
+                ack.put("screen_share_active", screenShareActive);
+            } catch (Exception ignored) {
+            }
+            return ack;
+        } catch (PilotException e) {
+            PilotLog.e("Failed to update LiveKit live quality", e);
+
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("message", e.getMessage());
+            metadata.put("http_code", e.getHttpCode());
+            Pilot.event("live_update_failed", "live", metadata);
+            return buildAck(false, e.getMessage() != null ? e.getMessage() : "Failed to update live quality");
+        } catch (Exception e) {
+            PilotLog.e("Failed to update LiveKit live quality", e);
+
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("message", e.getMessage());
+            Pilot.event("live_update_failed", "live", metadata);
+            return buildAck(false, e.getMessage() != null ? e.getMessage() : "Failed to update live quality");
         }
     }
 

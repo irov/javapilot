@@ -12,6 +12,7 @@ Lightweight Android SDK for connecting apps to **Pilot** — a real-time remote 
 - **Remote actions** — trigger commands from dashboard with per-widget callbacks
 - **App screen live** — on-demand LiveKit video live with remote tap/long-press control and in-app touch overlay
 - **Log streaming** — structured logs with levels, categories, threads, per-entry attributes and metadata
+- **Metrics** — time-series performance data (FPS, memory, CPU, network, custom) with collectors and charts
 - **Session attributes** — static and dynamic key-value pairs attached to the session, native types preserved (boolean, int, float, null)
 - **Log attributes** — static and dynamic key-value pairs attached to every log entry
 - **Circular log buffer** — configurable buffer size and batch size for log flushing
@@ -19,9 +20,18 @@ Lightweight Android SDK for connecting apps to **Pilot** — a real-time remote 
 - **Custom logger** — redirect SDK logs into your own logging system
 - **Zero dependencies on engine** — works with any Android project
 
-## Setup
+## Documentation
 
-Add JitPack repository and dependency:
+| Guide | Description |
+|-------|-------------|
+| [Android Integration](docs/android-integration.md) | Setup, configuration, session management |
+| [Widgets](docs/widgets.md) | Tabs, layouts, all widget types, remote actions |
+| [Logging & Events](docs/logging.md) | Structured logs, events, revenue tracking, screen changes |
+| [Metrics](docs/metrics.md) | Performance metrics, collectors, custom metric types |
+| [Live Streaming](docs/live-streaming.md) | Screen streaming via LiveKit, remote touch |
+| [Self-Hosting](docs/self-hosting.md) | Deploy backend, dashboard, and LiveKit |
+
+## Quick start
 
 ```groovy
 // settings.gradle
@@ -37,66 +47,35 @@ dependencies {
 }
 ```
 
-## Quick start
-
 ```java
-// Session attributes — native types preserved (bool, int, float, null)
-PilotSessionAttributeBuilder sessionAttrs = new PilotSessionAttributeBuilder()
-    .put("is_debug", BuildConfig.DEBUG)          // boolean
-    .put("install_version", 42)                  // int
-    .put("build_type", "debug")                  // string
-    .put("referrer", null)                       // null
-    .putProvider("user_id", () -> getUserId());   // dynamic provider
-
-// Log attributes — attached to every log entry
-PilotLogAttributeBuilder logAttrs = new PilotLogAttributeBuilder()
-    .putProvider("user_score", () -> game.getScore())  // float, changes dynamically
-    .putProvider("screen_name", () -> getCurrentScreen());
-
 // Initialize
 PilotConfig config = new PilotConfig.Builder(
         "https://pilot.example.com",
         "plt_your_api_token"
     )
     .setDeviceName("Pixel 8")
-    .setSessionAttributes(sessionAttrs)
-    .setLogAttributes(logAttrs)
-    .setLogBatchSize(100)    // logs per flush cycle (default 100)
-    .setLogBufferSize(1000)  // max buffered logs (default 1000)
     .build();
 
 Pilot.initialize(config, app);
 
-// Build UI — each service adds its own tab
+// Build UI
 PilotUI ui = Pilot.getUI();
 PilotTab tab = ui.addTab("game", "Game Controls");
 PilotLayout root = tab.vertical();
 
-// Buttons with callbacks
 root.addButton("btn-restart", "Restart")
     .variant("contained").color("error")
     .onClick(action -> restartGame());
 
-// Stats with value providers — auto-updated, dirty-checked
 root.addStat("stat-fps", "FPS")
     .unit("fps")
     .valueProvider(() -> game.getFps());
 
-// Horizontal row with padding
-PilotLayout row = root.addHorizontal();
-row.addButton("btn-a", "Action A").onClick(action -> doA());
-row.addPadding(1.0);
-row.addButton("btn-b", "Action B").onClick(action -> doB());
-
-// Labels with text providers
-root.addLabel("label-status", "Idle")
-    .color("info")
-    .textProvider(() -> game.getStatus());
-
-// Connect — UI is sent automatically on session start
-// and re-sent when widgets change
+// Connect
 Pilot.connect();
 ```
+
+See [Android Integration](docs/android-integration.md) for the full setup guide.
 
 If you want to use the dashboard Live tab, initialize Pilot with an Application or a Context that resolves to an Application via getApplicationContext(). Live capture stays off by default and starts only after Stream is enabled from the web dashboard.
 

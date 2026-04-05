@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.25";
+    public static final String VERSION = "1.0.32";
 
     private static volatile Pilot s_instance;
 
@@ -812,10 +812,11 @@ public final class Pilot {
                 requeueLogs(logChunk);
                 m_metrics.requeue(metricChunk);
 
-                if (e.isSessionGone()) {
-                    handleSessionGone();
+                if (e.isNetworkError()) {
+                    PilotLog.w("Network error during action poll, will retry");
                 } else {
-                    PilotLog.e("Action poll failed", e);
+                    PilotLog.w("Action poll failed with server error, attempting reconnect");
+                    attemptReconnect(sessionToken);
                 }
             }
         } finally {
@@ -952,6 +953,21 @@ public final class Pilot {
                     final JSONObject payload = action.getPayload();
                     m_executor.execute(() -> {
                         JSONObject result = m_liveManager.start(sessionToken, payload);
+                        acknowledgeAction(actionId, result);
+                    });
+                }
+                return true;
+
+            case LIVE_UPDATE:
+                String liveUpdateSessionToken = m_sessionToken.get();
+                if (liveUpdateSessionToken == null) {
+                    ackPayload = buildInternalAck(false, "No active session available for streaming");
+                    acknowledgeAction(action.getId(), ackPayload);
+                } else {
+                    final String actionId = action.getId();
+                    final JSONObject payload = action.getPayload();
+                    m_executor.execute(() -> {
+                        JSONObject result = m_liveManager.update(liveUpdateSessionToken, payload);
                         acknowledgeAction(actionId, result);
                     });
                 }
@@ -1131,14 +1147,54 @@ public final class Pilot {
         return changed;
     }
 
-    private void handleSessionGone() {
-        PilotLog.w("Session is gone (410), stopping");
+    private void attemptReconnect(@NonNull String token) {
+        cancelScheduledTasks();
+        setStatus(PilotSessionStatus.CONNECTING);
+
+        long retryDelay = 2000;
+        final long maxDelay = 30000;
+
+        while (m_running.get()) {
+            try {
+                Thread.sleep(retryDelay);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+
+            if (!m_running.get()) return;
+
+            try {
+                m_httpClient.pollActions(token, null, Collections.emptyList(), Collections.emptyList());
+
+                PilotLog.i("Reconnect successful, session still active");
+                setStatus(PilotSessionStatus.ACTIVE);
+                scheduleActionPolling(token, m_currentActionPollIntervalMs);
+                return;
+
+            } catch (PilotException e) {
+                if (e.isNetworkError()) {
+                    PilotLog.w("Reconnect: no network, retrying in %dms", retryDelay);
+                    retryDelay = Math.min(retryDelay * 2, maxDelay);
+                    continue;
+                }
+
+                PilotLog.w("Session lost (server error), starting fresh connection");
+                resetAndRestart();
+                return;
+            }
+        }
+    }
+
+    private void resetAndRestart() {
         m_running.set(false);
         m_sessionToken.set(null);
+
         m_liveManager.onSessionClosed();
-        cancelScheduledTasks();
-        setStatus(PilotSessionStatus.CLOSED);
+        setStatus(PilotSessionStatus.DISCONNECTED);
         notifySessionClosed();
+
+        startConnection();
     }
 
     private void setStatus(@NonNull PilotSessionStatus status) {
