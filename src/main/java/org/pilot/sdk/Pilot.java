@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }</pre>
  */
 public final class Pilot {
-    public static final String VERSION = "1.0.32";
+    public static final String VERSION = "1.0.33";
 
     private static volatile Pilot s_instance;
 
@@ -649,8 +649,16 @@ public final class Pilot {
                     return;
                 }
 
+                if (!e.isNetworkError()) {
+                    PilotLog.e("Server error, stopping connection: %s", e.getMessage());
+                    setStatus(PilotSessionStatus.ERROR);
+                    m_running.set(false);
+                    notifyError(e);
+                    return;
+                }
+
                 retryCount++;
-                PilotLog.w("Connection attempt %d failed: %s, retrying in %dms", retryCount, e.getMessage(), retryDelayMs);
+                PilotLog.w("Connection attempt %d failed (network): %s, retrying in %dms", retryCount, e.getMessage(), retryDelayMs);
                 setStatus(PilotSessionStatus.CONNECTING);
 
                 try {
