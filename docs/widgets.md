@@ -80,8 +80,7 @@ Boolean toggle:
 root.addSwitch("sw-godmode", "God mode")
     .defaultValue(false)
     .onChange(action -> {
-        boolean on = action.getPayload().optBoolean("value");
-        game.setGodMode(on);
+        game.setGodMode(action.getValue());
     });
 ```
 
@@ -95,8 +94,7 @@ root.addInput("input-cmd", "Command")
     .placeholder("type a command…")
     .defaultValue("")
     .onSubmit(action -> {
-        String text = action.getPayload().optString("value");
-        executeCommand(text);
+        executeCommand(action.getValue());
     });
 ```
 
@@ -113,8 +111,7 @@ root.addSelect("sel-level", "Level")
     })
     .defaultValue("normal")
     .onChange(action -> {
-        String level = action.getPayload().optString("value");
-        game.setDifficulty(level);
+        game.setDifficulty(action.getValue());
     });
 ```
 
@@ -127,8 +124,7 @@ root.addTextarea("ta-notes", "Notes")
     .rows(5)
     .defaultValue("")
     .onSubmit(action -> {
-        String text = action.getPayload().optString("value");
-        saveNotes(text);
+        saveNotes(action.getValue());
     });
 ```
 

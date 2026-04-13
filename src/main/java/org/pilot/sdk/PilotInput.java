@@ -3,6 +3,8 @@ package org.pilot.sdk;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.function.Consumer;
+
 /**
  * Text input widget. Triggers a "change" action with payload {@code {"value": "..."}}.
  */
@@ -33,6 +35,12 @@ public final class PilotInput extends PilotWidget<PilotInput> {
     @NonNull
     public PilotInput onSubmit(@Nullable PilotWidgetCallback callback) {
         m_ui.registerCallback(m_internalId, callback);
+        return this;
+    }
+
+    @NonNull
+    public PilotInput onSubmit(@NonNull Consumer<PilotInputAction> callback) {
+        m_ui.registerCallback(m_internalId, action -> callback.accept(new PilotInputAction(action)));
         return this;
     }
 }

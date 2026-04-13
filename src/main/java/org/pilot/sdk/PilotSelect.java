@@ -7,6 +7,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.function.Consumer;
+
 /**
  * Select (dropdown) widget. Triggers a "change" action with payload {@code {"value": "..."}}.
  */
@@ -44,6 +46,12 @@ public final class PilotSelect extends PilotWidget<PilotSelect> {
     @NonNull
     public PilotSelect onChange(@Nullable PilotWidgetCallback callback) {
         m_ui.registerCallback(m_internalId, callback);
+        return this;
+    }
+
+    @NonNull
+    public PilotSelect onChange(@NonNull Consumer<PilotSelectAction> callback) {
+        m_ui.registerCallback(m_internalId, action -> callback.accept(new PilotSelectAction(action)));
         return this;
     }
 }
